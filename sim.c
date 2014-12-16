@@ -63,21 +63,23 @@ float bitfloat(uint32_t x)
 
 uint32_t read()
 {
-    int x;
+    uint32_t x;
+    int i;
     float f;
     switch (read_mode) {
         case RAW:
             x = getchar();
-            if (x == EOF) error("read error");
+            if (x == (uint32_t)EOF) error("read error");
             return x;
         case HEX:
             if (scanf("%x", &x) < 1) error("read error");
-            if (x < 0 || 255 < x) error("read: invalid input");
+            if (x > 255) error("read: invalid input");
             return x;
         default:
             if (read_pos == 4) {
                 if (read_mode == INT) {
-                    if (scanf("%i", &x) < 1) error("read error");
+                    if (scanf("%i", &i) < 1) error("read error");
+                    x = i;
                 } else {
                     if (scanf("%f", &f) < 1) error("read error");
                     x = bitint(f);
@@ -164,28 +166,28 @@ uint32_t fpu_sign(uint32_t x, int mode)
     }
 }
 
-void load(int rx, int ra, uint32_t disp)
+uint32_t load(int ra, uint32_t disp)
 {
     int addr = reg[ra] + (disp << 2);
     if (addr & 3)
         error("load: invalid address: 0x%08x", addr);
     switch (addr) {
-        case 0x3000: reg[rx] = 1; return;
-        case 0x3004: reg[rx] = read(); return;
-        case 0x3008: reg[rx] = 1; return;
-        default:     reg[rx] = mem[addr >> 2]; return;
+        case 0x3000: return 1;
+        case 0x3004: return read();
+        case 0x3008: return 1;
+        default:     return mem[addr >> 2];
     }
 }
 
-void store(int rx, int ra, uint32_t disp)
+void store(int ra, uint32_t disp, uint32_t x)
 {
     int addr = reg[ra] + (disp << 2);
     if (addr & 3)
         error("store: invalid address: 0x%08x", addr);
     if (addr == 0x300c)
-        write(reg[rx]);
+        write(x);
     else
-        mem[addr >> 2] = reg[rx];
+        mem[addr >> 2] = x;
 }
 
 void exec_alu(uint32_t inst)
@@ -219,8 +221,8 @@ void exec_other(uint32_t inst)
     switch (opcode) {
         case  2: reg[rx] = disp; return;
         case  3: reg[rx] = (disp << 16) | (reg[ra] & 0xffff); return;
-        case  6: store(rx, ra, disp); return;
-        case  8: load(rx, ra, disp); return;
+        case  6: store(ra, disp, reg[rx]); return;
+        case  8: reg[rx] = load(ra, disp); return;
         case 11: reg[rx] = pc + 4; pc += disp << 2; return;
         case 12: pc = reg[rx] - 4; return;
         case 13: if (reg[rx] != reg[ra]) pc += disp << 2; return;
@@ -232,9 +234,9 @@ void exec(uint32_t inst)
 {
     int opcode = inst >> 28;
     switch (opcode) {
-        case 0:  return exec_alu(inst);
-        case 1:  return exec_fpu(inst);
-        default: return exec_other(inst);
+        case 0:  exec_alu(inst); break;
+        case 1:  exec_fpu(inst); break;
+        default: exec_other(inst); break;
     }
 }
 

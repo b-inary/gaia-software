@@ -1,11 +1,10 @@
 
 TARGET = sim
-SRCS = sim.c
 
-CFLAGS = -Wall -Wextra -O2 -std=c99
+CFLAGS = -Wall -Wextra -O2 -std=c99 -pedantic
+LDFLAGS = -Wl,--no-as-needed -lm
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) -o $@ $^ -lm
+$(TARGET):
 
 PHONY: clean
 clean:
