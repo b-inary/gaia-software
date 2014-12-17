@@ -2,7 +2,7 @@
 # -l lib.s
 
 fib:
-    enter   2
+    enter   8
     blt     r1, 2, fib_ret
     mov     [rbp - 4], r1
     sub     r1, r1, 1

@@ -490,7 +490,7 @@ def expand_enter(operands):
     check_operands_n(operands, 1)
     success, imm = parse_imm(operands[0])
     if success:
-        return expand_alu('sub', ['rsp', 'rsp', str(imm * 4 + 4)]) + ['st r28, rsp, 0']
+        return expand_alu('sub', ['rsp', 'rsp', str(imm + 4)]) + ['st r28, rsp, 0']
     error('expected integer literal: ' + operands[0])
 
 def expand_leave(operands):
