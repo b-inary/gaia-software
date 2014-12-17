@@ -641,6 +641,9 @@ args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
     sys.exit(1)
+if not args.o:
+    m = re.match(r'(.*)\.', args.inputs[0])
+    args.o = '{}.out'.format(m.group(1) if m else args.inputs[0])
 if args.e:
     success, entry_point = parse_imm(args.e)
     if not success:
@@ -712,9 +715,6 @@ for line, filename, pos in lines1:
         check_global(operands[0])
 
 # 3. assemble
-if not args.o:
-    m = re.match(r'(.*)\.', args.inputs[0])
-    args.o = '{}.out'.format(m.group(1) if m else args.inputs[0])
 with open(args.o, 'w') as f:
     for i, (line, filename, pos) in enumerate(lines3):
         mnemonic, operands = parse(line)
