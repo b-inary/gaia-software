@@ -1,1 +1,3 @@
 sim
+*.out
+*.out.s

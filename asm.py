@@ -466,6 +466,15 @@ def expand_pop(operands):
 
 def expand_call(operands):
     check_operands_n(operands, 1)
+    if is_reg(operands[0]):
+        return ['st rbp, rsp, -4',
+                'sub rsp, rsp, r0, 4',
+                'add rbp, rsp, r0, 0',
+                'jl r28, 0',
+                'add r28, r28, r0, 8',
+                'jr {}'.format(operands[0]),
+                'add rsp, rbp, r0, 4',
+                'ld rbp, rsp, -4']
     return ['st rbp, rsp, -4',
             'sub rsp, rsp, r0, 4',
             'add rbp, rsp, r0, 0',

@@ -242,8 +242,8 @@ void exec(uint32_t inst)
 
 void init_env()
 {
-    reg[30] = MEM_SIZE;
-    reg[31] = MEM_SIZE;
+    reg[30] = MEM_SIZE << 2;
+    reg[31] = MEM_SIZE << 2;
     pc = ENTRY_POINT;
     prog_size = 0;
     inst_cnt = 0;
