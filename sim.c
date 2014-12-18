@@ -12,8 +12,8 @@
 
 uint32_t reg[32];
 uint32_t mem[MEM_SIZE];
-int pc;
-int prog_size;
+uint32_t pc;
+uint32_t prog_size;
 long long inst_cnt;
 
 enum IOMode { RAW, HEX, INT, FLOAT };
@@ -26,13 +26,14 @@ int show_stat = 0;
 
 void print_env()
 {
-    fprintf(stderr, "<executed instruction count>: %lld\n", inst_cnt);
+    fprintf(stderr, "*** simulator status ***\n");
     fprintf(stderr, "<register>\n");
     for (int i = 0; i < 16; ++i)
         fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
                 i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
     fprintf(stderr, "<program counter>: 0x%08x\n", pc);
     fprintf(stderr, "<current instruction>: 0x%08x\n", mem[pc >> 2]);
+    fprintf(stderr, "<number of executed instructions>: %lld\n", inst_cnt);
 }
 
 void error(char *fmt, ...)
@@ -63,29 +64,29 @@ float bitfloat(uint32_t x)
 
 uint32_t read()
 {
-    uint32_t x;
     int i;
+    uint32_t u;
     float f;
     switch (read_mode) {
         case RAW:
-            x = getchar();
-            if (x == (uint32_t)EOF) error("read error");
-            return x;
+            i = getchar();
+            if (i == EOF) error("read error");
+            return i;
         case HEX:
-            if (scanf("%x", &x) < 1) error("read error");
-            if (x > 255) error("read: invalid input");
-            return x;
+            if (scanf("%x", &u) < 1) error("read error");
+            if (u > 255) error("read: invalid input");
+            return u;
         default:
             if (read_pos == 4) {
                 if (read_mode == INT) {
                     if (scanf("%i", &i) < 1) error("read error");
-                    x = i;
+                    u = i;
                 } else {
                     if (scanf("%f", &f) < 1) error("read error");
-                    x = bitint(f);
+                    u = bitint(f);
                 }
                 for (int i = 3; i >= 0; --i)
-                    read_buf[i] = x & 255, x >>= 8;
+                    read_buf[i] = u & 255, u >>= 8;
                 read_pos = 0;
             }
             return read_buf[read_pos++];
@@ -99,7 +100,11 @@ void write(uint32_t x)
             putchar(x & 255);
             return;
         case HEX:
-            printf("%02x\n", x & 255);
+            printf("%02x", x & 255);
+            if (++write_pos == 16)
+                putchar('\n'), write_pos = 0;
+            else
+                putchar(' ');
             return;
         default:
             write_buf[write_pos++] = x & 255;
@@ -128,8 +133,8 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case  5: return reg[ra] & reg[rb] & lit;
         case  6: return reg[ra] | reg[rb] | lit;
         case  7: return reg[ra] ^ reg[rb] ^ lit;
-        case 24: return (int32_t)reg[ra] != (int32_t)(reg[rb] + lit);
-        case 25: return (int32_t)reg[ra] == (int32_t)(reg[rb] + lit);
+        case 24: return reg[ra] != reg[rb] + lit;
+        case 25: return reg[ra] == reg[rb] + lit;
         case 26: return (int32_t)reg[ra] <  (int32_t)(reg[rb] + lit);
         case 27: return (int32_t)reg[ra] <= (int32_t)(reg[rb] + lit);
         case 28: return bitfloat(reg[ra]) != bitfloat(reg[rb]);
@@ -168,8 +173,8 @@ uint32_t fpu_sign(uint32_t x, int mode)
 
 uint32_t load(int ra, uint32_t disp)
 {
-    int addr = reg[ra] + (disp << 2);
-    if (addr & 3)
+    uint32_t addr = reg[ra] + (disp << 2);
+    if (addr & 3 || addr >= (MEM_SIZE << 2))
         error("load: invalid address: 0x%08x", addr);
     switch (addr) {
         case 0x3000: return 1;
@@ -181,8 +186,8 @@ uint32_t load(int ra, uint32_t disp)
 
 void store(int ra, uint32_t disp, uint32_t x)
 {
-    int addr = reg[ra] + (disp << 2);
-    if (addr & 3)
+    uint32_t addr = reg[ra] + (disp << 2);
+    if (addr & 3 || addr >= (MEM_SIZE << 2))
         error("store: invalid address: 0x%08x", addr);
     if (addr == 0x300c)
         write(x);
@@ -211,7 +216,7 @@ void exec_fpu(uint32_t inst)
     reg[rx] = fpu_sign(fpu(tag, ra, rb), sign);
 }
 
-void exec_other(uint32_t inst)
+void exec_misc(uint32_t inst)
 {
     int opcode = inst >> 28;
     int rx = (inst >> 23) & 31;
@@ -219,14 +224,34 @@ void exec_other(uint32_t inst)
     uint32_t disp = inst & 0xffff;
     if (disp >= 0x8000) disp -= 0x10000;
     switch (opcode) {
-        case  2: reg[rx] = disp; return;
-        case  3: reg[rx] = (disp << 16) | (reg[ra] & 0xffff); return;
-        case  6: store(ra, disp, reg[rx]); return;
-        case  8: reg[rx] = load(ra, disp); return;
-        case 11: reg[rx] = pc + 4; pc += disp << 2; return;
-        case 12: pc = reg[rx] - 4; return;
-        case 13: if (reg[rx] != reg[ra]) pc += disp << 2; return;
-        case 15: if (reg[rx] == reg[ra]) pc += disp << 2; return;
+        case 2:
+            reg[rx] = disp;
+            return;
+        case 3:
+            reg[rx] = (disp << 16) | (reg[ra] & 0xffff);
+            return;
+        case 6:
+            store(ra, disp, reg[rx]);
+            return;
+        case 8:
+            reg[rx] = load(ra, disp);
+            return;
+        case 11:
+            reg[rx] = pc + 4;
+            pc += disp << 2;
+            return;
+        case 12:
+            if (reg[rx] & 3) error("jr: register corrupted: r%d", rx);
+            pc = reg[rx] - 4;
+            return;
+        case 13:
+            if (reg[rx] != reg[ra]) pc += disp << 2;
+            return;
+        case 15:
+            if (reg[rx] == reg[ra]) pc += disp << 2;
+            return;
+        default:
+            assert(0);
     }
 }
 
@@ -236,7 +261,7 @@ void exec(uint32_t inst)
     switch (opcode) {
         case 0:  exec_alu(inst); break;
         case 1:  exec_fpu(inst); break;
-        default: exec_other(inst); break;
+        default: exec_misc(inst); break;
     }
 }
 
@@ -272,13 +297,15 @@ void runsim()
     init_env();
     load_file();
     while (1) {
-        if (pc & 3 || pc >= ENTRY_POINT + prog_size)
-            error("invalid program counter");
+        if (pc >= ENTRY_POINT + prog_size)
+            error("program counter out of range");
         if (mem[pc >> 2] == HALT_CODE) break;
         exec(mem[pc >> 2]);
         pc += 4;
         ++inst_cnt;
     }
+    if (write_mode == HEX && write_pos)
+        printf("\n");
 }
 
 void print_help(char *prog)
@@ -287,7 +314,7 @@ void print_help(char *prog)
     printf("options:\n");
     printf("  -read <mode>    set read mode\n");
     printf("  -write <mode>   set write mode\n");
-    printf("  -stat           show statistics\n");
+    printf("  -stat           show simulator status\n");
     printf("mode:\n");
     printf("  raw, hex, int, float (default: int)\n");
     exit(1);
