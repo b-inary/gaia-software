@@ -661,6 +661,9 @@ if args.l:
 # 0. preprocess
 lines0 = [('br main', '_main', 0)]
 for filename in args.inputs:
+    if not os.path.isfile(filename):
+        print >> sys.stderr, 'error: file does not exist:', filename
+        sys.exit(1)
     with open(filename, 'r') as f:
         filename = re.sub(r'.*[/\\]', '', filename)
         srcs[filename] = {}
@@ -696,15 +699,14 @@ for line, filename, pos in lines1:
         i += 1
 for i, (line, filename, pos) in enumerate(lines2):
     mnemonic, operands = parse(line)
-    if mnemonic in ['ld', 'st']:
-        check_operands_n(operands, 3)
+    if mnemonic in ['ld', 'st', '.int']:
+        check_operands_n(operands, 1, 3)
         operands[-1] = subst(operands[-1], i, False)
     if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
         check_operands_n(operands, 2, 3)
         operands[-1] = subst(operands[-1], i, True)
     if mnemonic == '__movl':
-        lines = mov_imm(operands[0], int(subst(operands[1], i, False)))
-        lines3.extend(map(lambda x: (x, filename, pos), lines))
+        lines3.append(('ldl {}, {}'.format(operands[0], subst(operands[1], i, False)), filename, pos))
     else:
         lines3.append(('{} {}'.format(mnemonic, ', '.join(operands)), filename, pos))
 for line, filename, pos in lines1:
