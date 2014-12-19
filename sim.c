@@ -17,7 +17,7 @@ uint32_t prog_size;
 long long inst_cnt;
 
 enum IOMode { RAW, HEX, INT, FLOAT };
-enum IOMode read_mode = INT, write_mode = INT;
+enum IOMode read_mode = RAW, write_mode = RAW;
 int read_pos, write_pos;
 int read_buf[4], write_buf[4];
 
@@ -100,11 +100,11 @@ void write(uint32_t x)
             putchar(x & 255);
             return;
         case HEX:
-            printf("%02x", x & 255);
-            if (++write_pos == 16)
-                putchar('\n'), write_pos = 0;
-            else
-                putchar(' ');
+            if ((write_pos & 15) == 0)
+                printf("0x%06x", write_pos);
+            printf(" %02x", x & 255);
+            if ((++write_pos & 15) == 0)
+                printf("\n");
             return;
         default:
             write_buf[write_pos++] = x & 255;
@@ -304,7 +304,7 @@ void runsim()
         pc += 4;
         ++inst_cnt;
     }
-    if (write_mode == HEX && write_pos)
+    if (write_mode == HEX && write_pos & 15)
         printf("\n");
 }
 
@@ -316,7 +316,7 @@ void print_help(char *prog)
     printf("  -write <mode>   set write mode\n");
     printf("  -stat           show simulator status\n");
     printf("mode:\n");
-    printf("  raw, hex, int, float (default: int)\n");
+    printf("  raw, hex, int, float (default: raw)\n");
     exit(1);
 }
 
