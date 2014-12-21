@@ -46,16 +46,12 @@ def check_imm_range(imm, b):
     x = 1 << (b - 1)
     return -x <= imm < x
 
-def cast_short(imm):
-    imm = imm & 0xffff
-    return imm if imm < 0x8000 else imm - 0x10000
-
 def float_to_bit(f):
     try:
         s = struct.pack('>f', f)
         return struct.unpack('>i', s)[0]
     except OverflowError:
-        error('float too large')
+        error('floating point value is too large')
 
 def parse_memaccess(operand):
     m = re.match(r'\[(r\w+)\s*([+-])\s*(\w+)\]$', operand)
@@ -92,7 +88,7 @@ def code_i(rx, ra, rb, imm, tag):
     if not success:
         error('expected integer literal: ' + imm)
     if not check_imm_range(i, 8):
-        error('immediate value ' + imm + ' exceeds valid range')
+        error('immediate value (' + imm + ') is too large')
     c1 = x >> 1
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
     c3 = ((b & 7) << 5) + ((i >> 3) & 31)
@@ -117,10 +113,13 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
         error('expected displacement: ' + disp)
     if disp_mode:
         if d & 3 != 0:
-            error('displacement ' + disp + ' is not a multiple of 4')
+            error('displacement (' + disp + ') is not a multiple of 4')
+        if not check_imm_range(d, 18):
+            error('displacement (' + disp + ') is too large')
         d >>= 2
-    if not check_imm_range(d, 16):
-        error('displacement ' + disp + ' exceeds valid range')
+    else:
+        if not -0x8000 <= d <= 0xffff:
+            error('immediate value (' + imm + ') is too large')
     c1 = (op << 4) + (x >> 1)
     c2 = ((x & 1) << 7) + (a << 2) + pred
     c3 = (d >> 8) & 255
@@ -179,7 +178,7 @@ def on_dot_int(operand):
     if not success:
         error('expected integer literal: ' + operand)
     if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value ' + operand + ' exceeds valid range')
+        error('immediate value (' + operand + ') is too large')
     return chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)
 
 def on_dot_float(operand):
@@ -299,9 +298,9 @@ def mov_imm(dest, imm):
     if check_imm_range(imm, 16):
         return ['ldl {}, {}'.format(dest, imm)]
     if imm & 0xffff == 0:
-        return ['ldh {}, r0, {}'.format(dest, cast_short(imm >> 16))]
-    return ['ldl {}, {}'.format(dest, cast_short(imm)),
-            'ldh {0}, {0}, {1}'.format(dest, cast_short(imm >> 16))]
+        return ['ldh {}, r0, {}'.format(dest, (imm >> 16) & 0xffff)]
+    return ['ldl {}, {}'.format(dest, imm & 0xffff),
+            'ldh {0}, {0}, {1}'.format(dest, (imm >> 16) & 0xffff)]
 
 def expand_mov(operands):
     check_operands_n(operands, 2)
@@ -699,16 +698,17 @@ for line, filename, pos in lines1:
         i += 1
 for i, (line, filename, pos) in enumerate(lines2):
     mnemonic, operands = parse(line)
-    if mnemonic in ['ld', 'st', '.int']:
+    if mnemonic in ['ld', 'st', '.int', '__movl']:
         check_operands_n(operands, 1, 3)
         operands[-1] = subst(operands[-1], i, False)
+        if mnemonic == '__movl':
+            if not check_imm_range(int(operands[-1]), 16):
+                error('label out of range')
+            mnemonic = 'ldl'
     if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
         check_operands_n(operands, 2, 3)
         operands[-1] = subst(operands[-1], i, True)
-    if mnemonic == '__movl':
-        lines3.append(('ldl {}, {}'.format(operands[0], subst(operands[1], i, False)), filename, pos))
-    else:
-        lines3.append(('{} {}'.format(mnemonic, ', '.join(operands)), filename, pos))
+    lines3.append(('{} {}'.format(mnemonic, ', '.join(operands)), filename, pos))
 for line, filename, pos in lines1:
     mnemonic, operands = parse(line)
     if mnemonic[-1] == ':':
@@ -751,7 +751,7 @@ if args.s:
     with open(args.o + '.s', 'w') as f:
         for i, (line, filename, pos) in enumerate(lines3):
             mnemonic, operands = parse(line)
-            f.write('0x{:06x}    {:7} {:19} {}'.format(
+            f.write('{:#08x}  {:7} {:17} {}'.format(
                 entry_point + 4 * i,
                 mnemonic,
                 ', '.join(operands),
