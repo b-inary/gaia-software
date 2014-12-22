@@ -630,12 +630,13 @@ def show_label(i):
 # parse command line arguments
 argparser = argparse.ArgumentParser(usage='%(prog)s [options] file...')
 argparser.add_argument('inputs', nargs='*', help='input files', metavar='file...')
-argparser.add_argument('-a', action='store_true', help='output as rs232c send test format')
+argparser.add_argument('-a', help='output as rs232c send test format', action='store_true')
 argparser.add_argument('-e', help='set entry point address', metavar='<integer>')
-argparser.add_argument('-k', action='store_true', help='output as array of std_logic_vector format')
+argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>')
+argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
-argparser.add_argument('-s', action='store_true', help='output preprocessed assembly')
+argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
@@ -684,6 +685,9 @@ for line, filename, pos in lines0:
 i = 0
 lines2 = []
 lines3 = []
+movl_long = False
+if not args.n and len(lines1) >= (0x8000 - entry_point) >> 2:
+    movl_long = True
 for line, filename, pos in lines1:
     mnemonic, operands = parse(line)
     if mnemonic[-1] == ':':
@@ -693,22 +697,33 @@ for line, filename, pos in lines1:
     elif mnemonic == '.global':
         check_operands_n(operands, 1)
         add_global(operands[0])
+    elif mnemonic == '__movl' and movl_long:
+        lines2.extend([(line, filename, pos), ('nop', filename, pos)])
+        i += 2
     else:
         lines2.append((line, filename, pos))
         i += 1
+next_line = ''
 for i, (line, filename, pos) in enumerate(lines2):
-    mnemonic, operands = parse(line)
-    if mnemonic in ['ld', 'st', '.int', '__movl']:
-        check_operands_n(operands, 1, 3)
-        operands[-1] = subst(operands[-1], i, False)
-        if mnemonic == '__movl':
-            if not check_imm_range(int(operands[-1]), 16):
-                error('label out of range')
-            mnemonic = 'ldl'
-    if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
-        check_operands_n(operands, 2, 3)
-        operands[-1] = subst(operands[-1], i, True)
-    lines3.append(('{} {}'.format(mnemonic, ', '.join(operands)), filename, pos))
+    if next_line:
+        lines3.append((next_line, filename, pos))
+        next_line = ''
+    else:
+        mnemonic, operands = parse(line)
+        if mnemonic in ['ld', 'st', '.int', '__movl']:
+            check_operands_n(operands, 1, 3)
+            operands[-1] = subst(operands[-1], i, False)
+            if mnemonic == '__movl':
+                if movl_long:
+                    next_line = 'ldh {0}, {0}, {1}'.format(operands[0], int(operands[1]) >> 16)
+                    operands[1] = str(int(operands[1]) & 0xffff)
+                elif not check_imm_range(int(operands[1]), 16):
+                    error('label out of range')
+                mnemonic = 'ldl'
+        if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
+            check_operands_n(operands, 2, 3)
+            operands[-1] = subst(operands[-1], i, True)
+        lines3.append(('{} {}'.format(mnemonic, ', '.join(operands)), filename, pos))
 for line, filename, pos in lines1:
     mnemonic, operands = parse(line)
     if mnemonic[-1] == ':':
