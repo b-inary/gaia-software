@@ -659,7 +659,7 @@ if args.l:
     library = re.sub(r'.*[/\\]', '', args.l)
 
 # 0. preprocess
-lines0 = [('br main', '_main', 0)]
+lines0 = []
 for filename in args.inputs:
     if not os.path.isfile(filename):
         print >> sys.stderr, 'error: file does not exist:', filename
@@ -682,8 +682,8 @@ for line, filename, pos in lines0:
     lines1.extend(map(lambda x: (x, filename, pos), lines))
 
 # 2. label resolution (by 2-pass algorithm)
-i = 0
-lines2 = []
+i = 3
+lines2 = [('__movl main, main', '_main', 0), ('', '', 0), ('jr r29', '', 0)]
 lines3 = []
 movl_long = False
 if not args.n and len(lines1) >= (0x8000 - entry_point) >> 2:
@@ -698,11 +698,11 @@ for line, filename, pos in lines1:
         check_operands_n(operands, 1)
         add_global(operands[0])
     elif mnemonic == '__movl' and movl_long:
-        lines2.extend([(line, filename, pos), ('nop', filename, pos)])
         i += 2
+        lines2.extend([(line, filename, pos), ('', filename, pos)])
     else:
-        lines2.append((line, filename, pos))
         i += 1
+        lines2.append((line, filename, pos))
 next_line = ''
 for i, (line, filename, pos) in enumerate(lines2):
     if next_line:
@@ -714,7 +714,9 @@ for i, (line, filename, pos) in enumerate(lines2):
             check_operands_n(operands, 1, 3)
             operands[-1] = subst(operands[-1], i, False)
             if mnemonic == '__movl':
-                if movl_long:
+                if movl_long or operands[0] == 'main':
+                    if operands[0] == 'main':
+                        operands[0] = 'r29'
                     next_line = 'ldh {0}, {0}, {1}'.format(operands[0], int(operands[1]) >> 16)
                     operands[1] = str(int(operands[1]) & 0xffff)
                 elif not check_imm_range(int(operands[1]), 16):
