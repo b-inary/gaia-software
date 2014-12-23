@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
-#include <assert.h>
 
 #define MEM_SIZE    0x100000
 #define ENTRY_POINT 0x4000
@@ -141,7 +140,7 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case 29: return bitfloat(reg[ra]) == bitfloat(reg[rb]);
         case 30: return bitfloat(reg[ra]) <  bitfloat(reg[rb]);
         case 31: return bitfloat(reg[ra]) <= bitfloat(reg[rb]);
-        default: assert(0);
+        default: error("instruction decode error (ALU)"); return 0;
     }
 }
 
@@ -157,7 +156,7 @@ uint32_t fpu(int tag, int ra, int rb)
         case 6:  return (uint32_t)roundf(bitfloat(reg[ra]));
         case 7:  return bitint((float)reg[ra]);
         case 8:  return bitint(floorf(bitfloat(reg[ra])));
-        default: assert(0);
+        default: error("instruction decode error (FPU)"); return 0;
     }
 }
 
@@ -251,7 +250,8 @@ void exec_misc(uint32_t inst)
             if (reg[rx] == reg[ra]) pc += disp << 2;
             return;
         default:
-            assert(0);
+            error("instruction decode error");
+            return;
     }
 }
 
