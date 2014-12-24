@@ -4,7 +4,6 @@
 # ----------------------------------------------------------------------
 
 # comment
-; comment
 
 label:
 
@@ -73,10 +72,6 @@ main:
     and     r1, r2, 345678
     neg     r1, r2
     not     r1, r2
-    shift   r1, r2, r3, 4
-    shift   r1, r2, r3
-    shift   r1, r2, 3
-    shift   r1, r2, -3
     cmpgt   r1, r2, r3
     cmpge   r1, r2, 3
     fcmpgt  r1, r2, r3
