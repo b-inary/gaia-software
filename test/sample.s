@@ -99,6 +99,7 @@ main:
     halt
 
     # directives
+.align  256
     .int    42
     .int    0xdeadbeef, 3
     .float  1.2e34

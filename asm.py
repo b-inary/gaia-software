@@ -124,7 +124,7 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
         error('expected displacement: ' + disp)
     if disp_mode:
         if d & 3 != 0:
-            error('displacement (' + disp + ') is not a multiple of 4')
+            error('displacement must be a multiple of 4')
         if not check_imm_range(d, 18):
             error('displacement (' + disp + ') is too large')
         d >>= 2
@@ -689,6 +689,17 @@ for mnemonic, operands, filename, pos in lines1:
     elif mnemonic == '.global':
         check_operands_n(operands, 1)
         add_global(operands[0])
+    elif mnemonic == '.align':
+        check_operands_n(operands, 1)
+        success, imm = parse_imm(operands[0])
+        if not success:
+            error('expected integer literal: ' + operands[0])
+        if imm < 4 or (imm & (imm - 1)) > 0:
+            error('invalid alignment')
+        padding = imm - ((entry_point + (i << 2)) & (imm - 1));
+        if padding < imm:
+            i += padding >> 2
+            lines2.extend([('add', ['r0', 'r0', 'r0', '0'], filename, pos)] * (padding >> 2))
     elif mnemonic == '__movl' and movl_long:
         i += 2
         lines2.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
