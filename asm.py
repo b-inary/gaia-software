@@ -183,18 +183,16 @@ def on_misc3(operands, op, pred, disp_mode):
     return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
 
 def on_dot_int(operand):
-    success, imm = parse_imm(operand)
+    check_operands_n(operands, 2)
+    success, imm = parse_imm(operand[0])
     if not success:
-        error('expected integer literal: ' + operand)
+        error('expected integer literal: ' + operands[0])
+    success, cnt = parse_imm(operands[1])
+    if not success:
+        error('expected integer literal: ' + operands[1])
     if not -0x80000000 <= imm <= 0xffffffff:
         error('immediate value (' + operand + ') is too large')
-    return chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)
-
-def on_dot_float(operand):
-    success, imm = parse_float(operand)
-    if not success:
-        error('expected floating point literal: ' + operand)
-    return on_dot_int(str(float_to_bit(imm)))
+    return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
 alu3_table = {
     'fcmpne':   28,
@@ -289,9 +287,7 @@ def code(mnemonic, operands):
     if mnemonic in misc3_table:
         return on_misc3(operands, misc3_table[mnemonic], pred, disp_mode)
     if mnemonic == '.int':
-        return on_dot_int(operands[0])
-    if mnemonic == '.float':
-        return on_dot_float(operands[0])
+        return on_dot_int(operands)
     error('unknown mnemonic \'{}\''.format(mnemonic))
 
 
@@ -301,7 +297,7 @@ def code(mnemonic, operands):
 
 def expand_nop(operands):
     check_operands_n(operands, 0)
-    return [('add', ['r0', 'r0', 'r0', '0'])]
+    return [('.int', ['0', '1'])]
 
 def mov_imm(dest, imm):
     if check_imm_range(imm, 16):
@@ -495,21 +491,17 @@ def expand_halt(operands):
 
 def expand_dot_int(operands):
     check_operands_n(operands, 1, 2)
-    if len(operands) == 1:
+    if len(operands) == 2:
         return [('.int', operands)]
-    success, imm = parse_imm(operands[1])
-    if not success:
-        error('expected integer literal: ' + operands[1])
-    return [('.int', [operands[0]])] * imm
+    return [('.int', [operands[0], '1'])]
 
 def expand_dot_float(operands):
     check_operands_n(operands, 1, 2)
-    if len(operands) == 1:
-        return [('.float', operands)]
-    success, imm = parse_imm(operands[1])
+    success, imm = parse_float(operands[0])
     if not success:
-        error('expected integer literal: ' + operands[1])
-    return [('.float', [operands[0]])] * imm
+        error('expected floating point literal: ' + operands[0])
+    operands[0] = str(float_to_bit(imm))
+    return expand_dot_int(operands)
 
 macro_table = {
     'nop':      expand_nop,
@@ -601,7 +593,12 @@ def label_addr(label, cur, rel):
         else:
             error('label \'{}\' is not declared'.format(label))
     if len(decl) > 1:
-        error('label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(decl)))
+        msg = 'label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(sorted(decl)))
+        if label == 'main':
+            print >> sys.stderr, 'asm: error:', msg
+            sys.exit(1)
+        else:
+            error(msg)
     labels[label][decl[0]][2] = True
     return str(4 * labels[label][decl[0]][0] + offset)
 
@@ -702,7 +699,7 @@ for mnemonic, operands, filename, pos in lines1:
         padding = imm - ((entry_point + (i << 2)) & (imm - 1));
         if padding < imm:
             i += padding >> 2
-            lines2.extend([('.int', ['0'], filename, pos)] * (padding >> 2))
+            lines2.append(('.int', ['0', str(padding >> 2)], filename, pos))
     elif mnemonic == '__movl' and movl_long:
         i += 2
         lines2.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
@@ -717,7 +714,8 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
     else:
         if mnemonic in ['ld', 'st', '.int', '__movl']:
             check_operands_n(operands, 1, 3)
-            operands[-1] = label_addr(operands[-1], i, False)
+            idx = 0 if mnemonic == '.int' else -1
+            operands[idx] = label_addr(operands[idx], i, False)
             if mnemonic == '__movl':
                 if movl_long or operands[0] == 'main':
                     if operands[0] == 'main':
@@ -740,9 +738,12 @@ for mnemonic, operands, filename, pos in lines1:
 # 3. assemble
 if args.s:
     with open(args.o + '.s', 'w') as f:
+        ofs = 0
         for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
-            s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * i, mnemonic, ', '.join(operands))
-            f.write((s + show_label(i)).strip() + '\n')
+            s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * i + ofs, mnemonic, ', '.join(operands))
+            print >> f, (s + show_label(i)).strip()
+            if mnemonic == '.int':
+                ofs += len(code(mnemonic, operands)) - 4
 with open(args.o, 'w') as f:
     for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
         byterepr = code(mnemonic, operands)
