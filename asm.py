@@ -26,7 +26,6 @@ def warning(msg):
         sys.stderr.write('\x1b[0m')
     else:
         print >> sys.stderr, '{}:{}: warning:'.format(filename, pos), msg
-    print >> sys.stderr, '  ' + srcs[filename][pos]
 
 
 # ----------------------------------------------------------------------
@@ -620,11 +619,13 @@ argparser = argparse.ArgumentParser(usage='%(prog)s [options] file...')
 argparser.add_argument('inputs', nargs='*', help='input files', metavar='file...')
 argparser.add_argument('-a', help='output as rs232c send test format', action='store_true')
 argparser.add_argument('-e', help='set entry point address', metavar='<integer>')
+argparser.add_argument('-f', help='append label to end of program', metavar='<label>')
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>')
 argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
+argparser.add_argument('-w', help='suppress warnings', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
@@ -663,6 +664,9 @@ for filename in args.inputs:
                 line = line[0 : comment_pos].rstrip()
             if line:
                 lines0.append((line, filename, pos + 1))
+if args.f:
+    lines0.append(('.global ' + args.f, '_end', 0))
+    lines0.append((args.f + ':', '_end', 0))
 
 # 1. macro expansion
 lines1 = []
@@ -714,7 +718,7 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
             operands[-1] = label_addr(operands[-1], i, True)
         lines3.append((mnemonic, operands, filename, pos))
 for mnemonic, operands, filename, pos in lines1:
-    if mnemonic[-1] == ':':
+    if mnemonic[-1] == ':' and not args.w:
         warn_unused_label(mnemonic[:-1])
     if mnemonic == '.global':
         check_global(operands[0])
