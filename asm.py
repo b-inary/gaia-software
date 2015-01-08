@@ -60,7 +60,7 @@ def check_imm_range(imm, b):
 def float_to_bit(f):
     try:
         s = struct.pack('>f', f)
-        return struct.unpack('>i', s)[0]
+        return struct.unpack('>I', s)[0]
     except OverflowError:
         error('floating point value is too large')
 
@@ -183,15 +183,12 @@ def on_misc3(operands, op, pred, disp_mode):
     return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
 
 def on_dot_int(operand):
-    check_operands_n(operands, 2)
     success, imm = parse_imm(operand[0])
     if not success:
         error('expected integer literal: ' + operands[0])
-    success, cnt = parse_imm(operands[1])
-    if not success:
-        error('expected integer literal: ' + operands[1])
     if not -0x80000000 <= imm <= 0xffffffff:
         error('immediate value (' + operand + ') is too large')
+    cnt = int(operands[1], 0)
     return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
 alu3_table = {
@@ -297,7 +294,7 @@ def code(mnemonic, operands):
 
 def expand_nop(operands):
     check_operands_n(operands, 0)
-    return [('.int', ['0', '1'])]
+    return [('add', ['r0', 'r0', 'r0', '0'])]
 
 def mov_imm(dest, imm):
     if check_imm_range(imm, 16):
@@ -500,7 +497,7 @@ def expand_dot_float(operands):
     success, imm = parse_float(operands[0])
     if not success:
         error('expected floating point literal: ' + operands[0])
-    operands[0] = str(float_to_bit(imm))
+    operands[0] = '{:#010x}'.format(float_to_bit(imm))
     return expand_dot_int(operands)
 
 macro_table = {
@@ -689,6 +686,13 @@ for mnemonic, operands, filename, pos in lines1:
     elif mnemonic == '.global':
         check_operands_n(operands, 1)
         add_global(operands[0])
+    elif mnemonic == '.int':
+        check_operands_n(operands, 2)
+        success, imm = parse_imm(operands[1])
+        if not success:
+            error('expected integer literal: ' + operands[1])
+        i += imm
+        lines2.append((mnemonic, operands, filename, pos))
     elif mnemonic == '.align':
         check_operands_n(operands, 1)
         success, imm = parse_imm(operands[0])
@@ -740,10 +744,10 @@ if args.s:
     with open(args.o + '.s', 'w') as f:
         ofs = 0
         for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
-            s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * i + ofs, mnemonic, ', '.join(operands))
-            print >> f, (s + show_label(i)).strip()
+            s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * (i + ofs), mnemonic, ', '.join(operands))
+            print >> f, (s + show_label(i + ofs)).strip()
             if mnemonic == '.int':
-                ofs += len(code(mnemonic, operands)) - 4
+                ofs += int(operands[1], 0) - 1
 with open(args.o, 'w') as f:
     for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
         byterepr = code(mnemonic, operands)
