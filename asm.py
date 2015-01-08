@@ -581,33 +581,25 @@ def check_global(label):
     if labels[label][filename][0] < 0:
         error('label \'{}\' is not declared'.format(label))
 
-def label_error(label):
-    if label == 'main':
-        print >> sys.stderr, 'asm: error: global label \'main\' is required'
-        sys.exit(1)
-    else:
-        error('label \'{}\' is not declared'.format(label))
-
 def label_addr(label, cur, rel):
     if parse_imm(label)[0]:
         return label
-    if label not in labels:
-        label_error(label)
+    decl = []
     offset = -4 * (cur + 1) if rel else entry_point
-    if filename in labels[label]:
-        labels[label][filename][2] = True
-        return str(4 * labels[label][filename][0] + offset)
-    else:
-        decl = ''
+    if label in labels:
         for key in labels[label]:
-            if labels[label][key][1]:
-                if decl:
-                    error('label \'{}\' is declared in multiple files ({}, {})'.format(label, decl, key))
-                decl = key
-        if not decl:
-            label_error(label)
-        labels[label][decl][2] = True
-        return str(4 * labels[label][decl][0] + offset)
+            if key == filename or labels[label][key][1]:
+                decl += [key]
+    if len(decl) == 0:
+        if label == 'main':
+            print >> sys.stderr, 'asm: error: global label \'main\' is required'
+            sys.exit(1)
+        else:
+            error('label \'{}\' is not declared'.format(label))
+    if len(decl) > 1:
+        error('label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(decl)))
+    labels[label][decl[0]][2] = True
+    return str(4 * labels[label][decl[0]][0] + offset)
 
 def warn_unused_label(label):
     if not labels[label][filename][2] and not (filename == library and labels[label][filename][1]):
