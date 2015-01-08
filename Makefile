@@ -8,5 +8,5 @@ $(TARGET):
 
 PHONY: clean
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) *.out *.out.s
 
