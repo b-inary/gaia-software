@@ -315,22 +315,27 @@ def expand_mov(operands):
     check_operands_n(operands, 2)
     if is_reg(operands[0]) and is_reg(operands[1]):
         return [('add', [operands[0], operands[1], 'r0', '0'])]
-    success, imm = parse_imm(operands[1])
-    if success:
-        return mov_imm(operands[0], imm)
-    success, imm = parse_float(operands[1])
-    if success:
-        return mov_imm(operands[0], float_to_bit(imm))
     if operands[1][0] == '[' and operands[1][-1] == ']':
         success, base, disp = parse_memaccess(operands[1])
         if success:
             return [('ld', [operands[0], base, disp])]
         return [('ld', [operands[0], 'r0', operands[1][1:-1]])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
+        pre = []
+        success, imm = parse_imm(operands[1])
+        if success:
+            pre = mov_imm('r29', imm)
+            operands[1] = 'r29'
         success, base, disp = parse_memaccess(operands[0])
         if success:
-            return [('st', [operands[1], base, disp])]
-        return [('st', [operands[1], 'r0', operands[0][1:-1]])]
+            return pre + [('st', [operands[1], base, disp])]
+        return pre + [('st', [operands[1], 'r0', operands[0][1:-1]])]
+    success, imm = parse_imm(operands[1])
+    if success:
+        return mov_imm(operands[0], imm)
+    success, imm = parse_float(operands[1])
+    if success:
+        return mov_imm(operands[0], float_to_bit(imm))
     if is_reg(operands[0]):
         return [('__movl', operands)]
     error('invalid syntax')
@@ -678,9 +683,7 @@ for line, filename, pos in lines0:
 i = 3
 lines2 = [('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
 lines3 = []
-movl_long = False
-if not args.n and len(lines1) >= (0x8000 - entry_point) >> 2:
-    movl_long = True
+movl_long = not args.n
 for mnemonic, operands, filename, pos in lines1:
     if mnemonic[-1] == ':':
         if len(operands) > 0:
@@ -699,7 +702,7 @@ for mnemonic, operands, filename, pos in lines1:
         padding = imm - ((entry_point + (i << 2)) & (imm - 1));
         if padding < imm:
             i += padding >> 2
-            lines2.extend([('add', ['r0', 'r0', 'r0', '0'], filename, pos)] * (padding >> 2))
+            lines2.extend([('.int', ['0'], filename, pos)] * (padding >> 2))
     elif mnemonic == '__movl' and movl_long:
         i += 2
         lines2.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])

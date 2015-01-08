@@ -170,9 +170,28 @@ uint32_t fpu_sign(uint32_t x, int mode)
     }
 }
 
+uint32_t mmu(uint32_t addr)
+{
+    uint32_t tmp;
+    if (mem[0x3ff8 >> 2] == 0) return addr;
+    tmp = mem[0x3ffc >> 2] | ((addr >> 22) << 2);
+    if (tmp & 3 || tmp >= (MEM_SIZE << 2))
+        error("mmu: PDE address error: 0x%08x", tmp);
+    tmp = mem[tmp >> 2];
+    if ((tmp & 1) == 0)
+        error("mmu: invalid PDE");
+    tmp = (tmp & ~0x0fff) | (((addr >> 12) & 0x03ff) << 2);;
+    if (tmp >= (MEM_SIZE << 2))
+        error("mmu: PTE address error: 0x%08x", tmp);
+    tmp = mem[tmp >> 2];
+    if ((tmp & 1) == 0)
+        error("mmu: invalid PTE");
+    return (tmp & ~0x0fff) | (addr & 0x0fff);
+}
+
 uint32_t load(int ra, uint32_t disp)
 {
-    uint32_t addr = reg[ra] + (disp << 2);
+    uint32_t addr = mmu(reg[ra] + (disp << 2));
     if (addr & 3 || addr >= (MEM_SIZE << 2))
         error("load: invalid address: 0x%08x", addr);
     switch (addr) {
@@ -185,7 +204,7 @@ uint32_t load(int ra, uint32_t disp)
 
 void store(int ra, uint32_t disp, uint32_t x)
 {
-    uint32_t addr = reg[ra] + (disp << 2);
+    uint32_t addr = mmu(reg[ra] + (disp << 2));
     if (addr & 3 || addr >= (MEM_SIZE << 2))
         error("store: invalid address: 0x%08x", addr);
     if (addr == 0x300c)
