@@ -315,9 +315,8 @@ def expand_mov(operands):
         return [('ld', [operands[0], 'r0', operands[1][1:-1]])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
         pre = []
-        success, imm = parse_imm(operands[1])
-        if success:
-            pre = mov_imm('r29', imm)
+        if not is_reg(operands[1]):
+            pre = expand_mov(['r29', operands[1]])
             operands[1] = 'r29'
         success, base, disp = parse_memaccess(operands[0])
         if success:
