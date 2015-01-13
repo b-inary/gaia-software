@@ -39,6 +39,11 @@ for i in range(32):
 def is_reg(operand):
     return operand in regs
 
+def regnum(reg):
+    if reg not in regs:
+        error('expected register: ' + reg)
+    return regs[reg]
+
 def parse_imm(operand):
     try:
         imm = int(operand, 0)
@@ -86,57 +91,6 @@ def check_operands_n(operands, n, m=-1):
     if l > max(n, m):
         error('expected {} operands, but {} given'.format(max(n, m), l))
 
-def regnum(reg):
-    if reg not in regs:
-        error('expected register: ' + reg)
-    return regs[reg]
-
-def code_i(rx, ra, rb, imm, tag):
-    x = regnum(rx)
-    a = regnum(ra)
-    b = regnum(rb)
-    success, i = parse_imm(imm)
-    if not success:
-        error('expected integer literal: ' + imm)
-    if not check_imm_range(i, 8):
-        error('immediate value (' + imm + ') is too large')
-    c1 = x >> 1
-    c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
-    c3 = ((b & 7) << 5) + ((i >> 3) & 31)
-    c4 = ((i & 7) << 5) + tag
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
-
-def code_f(rx, ra, rb, sign, tag):
-    x = regnum(rx)
-    a = regnum(ra)
-    b = regnum(rb)
-    c1 = (1 << 4) + (x >> 1)
-    c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
-    c3 = ((b & 7) << 5)
-    c4 = (sign << 5) + tag
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
-
-def code_m(op, rx, ra, pred, disp, disp_mode):
-    x = regnum(rx)
-    a = regnum(ra)
-    success, d = parse_imm(disp)
-    if not success:
-        error('expected displacement: ' + disp)
-    if disp_mode:
-        if d & 3 != 0:
-            error('displacement must be a multiple of 4')
-        if not check_imm_range(d, 18):
-            error('displacement (' + disp + ') is too large')
-        d >>= 2
-    else:
-        if not -0x8000 <= d <= 0xffff:
-            error('immediate value (' + imm + ') is too large')
-    c1 = (op << 4) + (x >> 1)
-    c2 = ((x & 1) << 7) + (a << 2) + pred
-    c3 = (d >> 8) & 255
-    c4 = d & 255
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
-
 def parse(line):
     line = line.strip()
     if ' ' not in line:
@@ -149,47 +103,6 @@ def parse(line):
 # ----------------------------------------------------------------------
 #       mnemonic definitions
 # ----------------------------------------------------------------------
-
-def on_alu3(operands, tag):
-    check_operands_n(operands, 3)
-    return code_i(operands[0], operands[1], operands[2], '0', tag)
-
-def on_alu4(operands, tag):
-    check_operands_n(operands, 4)
-    return code_i(operands[0], operands[1], operands[2], operands[3], tag)
-
-def on_fpu2(operands, sign, tag):
-    check_operands_n(operands, 2)
-    return code_f(operands[0], operands[1], 'r0', sign, tag)
-
-def on_fpu3(operands, sign, tag):
-    check_operands_n(operands, 3)
-    return code_f(operands[0], operands[1], operands[2], sign, tag)
-
-# def on_misc0(operands, op, pred):
-#     check_operands_n(operands, 2)
-#     return code_m(op, 'r0', 'r0', pred, '0')
-
-def on_misc1(operands, op, pred, disp_mode):
-    check_operands_n(operands, 1)
-    return code_m(op, operands[0], 'r0', pred, '0', disp_mode)
-
-def on_misc2(operands, op, pred, disp_mode):
-    check_operands_n(operands, 2)
-    return code_m(op, operands[0], 'r0', pred, operands[1], disp_mode)
-
-def on_misc3(operands, op, pred, disp_mode):
-    check_operands_n(operands, 3)
-    return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
-
-def on_dot_int(operand):
-    success, imm = parse_imm(operand[0])
-    if not success:
-        error('expected integer literal: ' + operands[0])
-    if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value (' + operand + ') is too large')
-    cnt = int(operands[1], 0)
-    return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
 alu3_table = {
     'fcmpne':   28,
@@ -256,6 +169,93 @@ sign_table = {
     'abs':       2,
     'abs.neg':   3,
 }
+
+def code_i(rx, ra, rb, imm, tag):
+    x = regnum(rx)
+    a = regnum(ra)
+    b = regnum(rb)
+    success, i = parse_imm(imm)
+    if not success:
+        error('expected integer literal: ' + imm)
+    if not check_imm_range(i, 8):
+        error('immediate value (' + imm + ') is too large')
+    c1 = x >> 1
+    c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
+    c3 = ((b & 7) << 5) + ((i >> 3) & 31)
+    c4 = ((i & 7) << 5) + tag
+    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+
+def code_f(rx, ra, rb, sign, tag):
+    x = regnum(rx)
+    a = regnum(ra)
+    b = regnum(rb)
+    c1 = (1 << 4) + (x >> 1)
+    c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
+    c3 = ((b & 7) << 5)
+    c4 = (sign << 5) + tag
+    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+
+def code_m(op, rx, ra, pred, disp, disp_mode):
+    x = regnum(rx)
+    a = regnum(ra)
+    success, d = parse_imm(disp)
+    if not success:
+        error('expected displacement: ' + disp)
+    if disp_mode:
+        if d & 3 != 0:
+            error('displacement must be a multiple of 4')
+        if not check_imm_range(d, 18):
+            error('displacement (' + disp + ') is too large')
+        d >>= 2
+    else:
+        if not -0x8000 <= d <= 0xffff:
+            error('immediate value (' + imm + ') is too large')
+    c1 = (op << 4) + (x >> 1)
+    c2 = ((x & 1) << 7) + (a << 2) + pred
+    c3 = (d >> 8) & 255
+    c4 = d & 255
+    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+
+def on_alu3(operands, tag):
+    check_operands_n(operands, 3)
+    return code_i(operands[0], operands[1], operands[2], '0', tag)
+
+def on_alu4(operands, tag):
+    check_operands_n(operands, 4)
+    return code_i(operands[0], operands[1], operands[2], operands[3], tag)
+
+def on_fpu2(operands, sign, tag):
+    check_operands_n(operands, 2)
+    return code_f(operands[0], operands[1], 'r0', sign, tag)
+
+def on_fpu3(operands, sign, tag):
+    check_operands_n(operands, 3)
+    return code_f(operands[0], operands[1], operands[2], sign, tag)
+
+# def on_misc0(operands, op, pred):
+#     check_operands_n(operands, 2)
+#     return code_m(op, 'r0', 'r0', pred, '0')
+
+def on_misc1(operands, op, pred, disp_mode):
+    check_operands_n(operands, 1)
+    return code_m(op, operands[0], 'r0', pred, '0', disp_mode)
+
+def on_misc2(operands, op, pred, disp_mode):
+    check_operands_n(operands, 2)
+    return code_m(op, operands[0], 'r0', pred, operands[1], disp_mode)
+
+def on_misc3(operands, op, pred, disp_mode):
+    check_operands_n(operands, 3)
+    return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
+
+def on_dot_int(operand):
+    success, imm = parse_imm(operand[0])
+    if not success:
+        error('expected integer literal: ' + operands[0])
+    if not -0x80000000 <= imm <= 0xffffffff:
+        error('immediate value (' + operand + ') is too large')
+    cnt = int(operands[1], 0)
+    return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
 def code(mnemonic, operands):
     if mnemonic in alu3_table:
@@ -570,9 +570,47 @@ def add_global(label):
     dic[filename] = [val[0], True, False]
     labels[label] = dic
 
-def check_global(label):
-    if labels[label][filename][0] < 0:
-        error('label \'{}\' is not declared'.format(label))
+def init_label(lines, jump_main, long_label):
+    global labels, rev_labels, filename, pos
+    labels = {}
+    rev_labels = {}
+    ret = []
+    if jump_main:
+        ret.extend([('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)])
+    i = len(ret)
+    for mnemonic, operands, filename, pos in lines:
+        if mnemonic[-1] == ':':
+            if len(operands) > 0:
+                error('label declaration must be followed by new line')
+            add_label(mnemonic[:-1], i)
+        elif mnemonic == '.align':
+            check_operands_n(operands, 1)
+            success, imm = parse_imm(operands[0])
+            if not success:
+                error('expected integer literal: ' + operands[0])
+            if imm < 4 or (imm & (imm - 1)) > 0:
+                error('invalid alignment')
+            padding = imm - ((entry_point + (i << 2)) & (imm - 1));
+            if padding < imm:
+                i += padding >> 2
+                ret.append(('.int', ['0', str(padding >> 2)], filename, pos))
+        elif mnemonic == '.global':
+            check_operands_n(operands, 1)
+            add_global(operands[0])
+        elif mnemonic == '.int':
+            check_operands_n(operands, 2)
+            success, imm = parse_imm(operands[1])
+            if not success:
+                error('expected integer literal: ' + operands[1])
+            i += imm
+            ret.append((mnemonic, operands, filename, pos))
+        elif mnemonic == '__movl' and long_label:
+            i += 2
+            ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
+        else:
+            i += 1
+            ret.append((mnemonic, operands, filename, pos))
+    return i, ret
 
 def label_addr(label, cur, rel):
     if parse_imm(label)[0]:
@@ -599,6 +637,10 @@ def label_addr(label, cur, rel):
     labels[label][decl[0]][2] = True
     return str(4 * labels[label][decl[0]][0] + offset)
 
+def check_global(label):
+    if labels[label][filename][0] < 0:
+        error('label \'{}\' is not declared'.format(label))
+
 def warn_unused_label(label):
     if not labels[label][filename][2] and not (filename == library and labels[label][filename][1]):
         warning('unused label \'{}\''.format(label))
@@ -623,6 +665,7 @@ argparser.add_argument('-k', help='output as array of std_logic_vector format', 
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>')
 argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
+argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
 argparser.add_argument('-w', help='suppress warnings', action='store_true')
 args = argparser.parse_args()
@@ -673,42 +716,12 @@ for line, filename, pos in lines0:
     lines1.extend(map(lambda (x, y): (x, y, filename, pos), lines))
 
 # 2. label resolution (by 2-pass algorithm)
-i = 3
-lines2 = [('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
+long_label = False
+i, lines2 = init_label(lines1, not args.r, False)
+if entry_point + i * 4 >= 0x8000 and not args.n:
+    long_label = True
+    lines2 = init_label(lines1, not args.r, True)[1]
 lines3 = []
-movl_long = not args.n
-for mnemonic, operands, filename, pos in lines1:
-    if mnemonic[-1] == ':':
-        if len(operands) > 0:
-            error('label declaration must be followed by new line')
-        add_label(mnemonic[:-1], i)
-    elif mnemonic == '.global':
-        check_operands_n(operands, 1)
-        add_global(operands[0])
-    elif mnemonic == '.int':
-        check_operands_n(operands, 2)
-        success, imm = parse_imm(operands[1])
-        if not success:
-            error('expected integer literal: ' + operands[1])
-        i += imm
-        lines2.append((mnemonic, operands, filename, pos))
-    elif mnemonic == '.align':
-        check_operands_n(operands, 1)
-        success, imm = parse_imm(operands[0])
-        if not success:
-            error('expected integer literal: ' + operands[0])
-        if imm < 4 or (imm & (imm - 1)) > 0:
-            error('invalid alignment')
-        padding = imm - ((entry_point + (i << 2)) & (imm - 1));
-        if padding < imm:
-            i += padding >> 2
-            lines2.append(('.int', ['0', str(padding >> 2)], filename, pos))
-    elif mnemonic == '__movl' and movl_long:
-        i += 2
-        lines2.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
-    else:
-        i += 1
-        lines2.append((mnemonic, operands, filename, pos))
 next_line = None
 for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
     if next_line:
@@ -720,7 +733,7 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
             idx = 0 if mnemonic == '.int' else -1
             operands[idx] = label_addr(operands[idx], i, False)
             if mnemonic == '__movl':
-                if movl_long or operands[0] == 'main':
+                if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
                     next_line = ('ldh', [operands[0], operands[0], str(int(operands[1]) >> 16)])
@@ -733,10 +746,10 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
             operands[-1] = label_addr(operands[-1], i, True)
         lines3.append((mnemonic, operands, filename, pos))
 for mnemonic, operands, filename, pos in lines1:
-    if mnemonic[-1] == ':' and not args.w:
-        warn_unused_label(mnemonic[:-1])
     if mnemonic == '.global':
         check_global(operands[0])
+    if mnemonic[-1] == ':' and not args.w:
+        warn_unused_label(mnemonic[:-1])
 
 # 3. assemble
 if args.s:
