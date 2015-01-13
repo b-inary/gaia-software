@@ -672,6 +672,9 @@ args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
     sys.exit(1)
+if args.l:
+    library = args.l
+    args.inputs = [library] + args.inputs
 if not args.o:
     args.o = 'a.out'
 if args.e:
@@ -684,18 +687,15 @@ if args.e:
         argparser.print_usage(sys.stderr)
         print >> sys.stderr, 'error: argument -e: entry address must be a multiple of 4'
         sys.exit(1)
-if args.l:
-    args.inputs = [args.l] + args.inputs
-    library = re.sub(r'.*[/\\]', '', args.l)
 
 # 0. preprocess
 lines0 = []
 for filename in args.inputs:
+    filename = os.path.relpath(filename)
     if not os.path.isfile(filename):
         print >> sys.stderr, 'error: file does not exist:', filename
         sys.exit(1)
     with open(filename, 'r') as f:
-        filename = re.sub(r'.*[/\\]', '', filename)
         srcs[filename] = {}
         for pos, line in enumerate(f):
             line = line.strip()
