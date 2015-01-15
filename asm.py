@@ -11,6 +11,10 @@ srcs = {}
 filename = ''
 pos = 0
 
+def fatal(msg):
+    print >> sys.stderr, '{}: error:'.format(os.path.basename(sys.argv[0])), msg
+    sys.exit(1)
+
 def error(msg):
     if sys.stderr.isatty():
         print >> sys.stderr, '\x1b[1m{}:{}: \x1b[31merror:\x1b[39m'.format(filename, pos), msg
@@ -575,7 +579,7 @@ def init_label(lines, jump_main, long_label):
     rev_labels = {}
     ret = []
     if jump_main:
-        ret.extend([('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)])
+        ret = [('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
     i = len(ret)
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
@@ -622,15 +626,13 @@ def label_addr(label, cur, rel):
                 decl += [key]
     if len(decl) == 0:
         if label == 'main':
-            print >> sys.stderr, 'asm: error: global label \'main\' is required'
-            sys.exit(1)
+            fatal('global label \'main\' is required')
         else:
             error('label \'{}\' is not declared'.format(label))
     if len(decl) > 1:
         msg = 'label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(sorted(decl)))
         if label == 'main':
-            print >> sys.stderr, 'asm: error:', msg
-            sys.exit(1)
+            fatal(msg)
         else:
             error(msg)
     labels[label][decl[0]][2] = True
@@ -672,7 +674,7 @@ if args.inputs == []:
     argparser.print_help(sys.stderr)
     sys.exit(1)
 if args.l:
-    library = args.l
+    library = os.path.relpath(args.l)
     args.inputs = [library] + args.inputs
 if not args.o:
     args.o = 'a.out'
@@ -680,20 +682,17 @@ if args.e:
     success, entry_point = parse_imm(args.e)
     if not success:
         argparser.print_usage(sys.stderr)
-        print >> sys.stderr, 'error: argument -e: expected integer:', args.e
-        sys.exit(1)
+        fatal('argument -e: expected integer: ' + args.e)
     if entry_point & 3 != 0:
         argparser.print_usage(sys.stderr)
-        print >> sys.stderr, 'error: argument -e: entry address must be a multiple of 4'
-        sys.exit(1)
+        fatal('argument -e: entry address must be a multiple of 4')
 
 # 0. preprocess
 lines0 = []
 for filename in args.inputs:
     filename = os.path.relpath(filename)
     if not os.path.isfile(filename):
-        print >> sys.stderr, 'error: file does not exist:', filename
-        sys.exit(1)
+        fatal('file does not exist: ' + filename)
     with open(filename, 'r') as f:
         srcs[filename] = {}
         for pos, line in enumerate(f):
@@ -716,10 +715,12 @@ for line, filename, pos in lines0:
 
 # 2. label resolution (by 2-pass algorithm)
 long_label = False
-i, lines2 = init_label(lines1, not args.r, False)
-if entry_point + i * 4 >= 0x8000 and not args.n:
+size, lines2 = init_label(lines1, not args.r, False)
+if entry_point + size * 4 >= 0x8000 and not args.n:
     long_label = True
-    lines2 = init_label(lines1, not args.r, True)[1]
+    size, lines2 = init_label(lines1, not args.r, True)
+if entry_point + size * 4 >= 0x400000:
+    fatal('program size exceeds 4MB limit ({:,} + {:,} bytes)'.format(entry_point, size * 4))
 lines3 = []
 next_line = None
 for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
@@ -756,7 +757,7 @@ if args.s:
         ofs = 0
         for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
             s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * (i + ofs), mnemonic, ', '.join(operands))
-            print >> f, (s + show_label(i + ofs)).strip()
+            print >> f, (s + show_label(i + ofs)).rstrip()
             if mnemonic == '.int':
                 ofs += int(operands[1], 0) - 1
 with open(args.o, 'w') as f:
