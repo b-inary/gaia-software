@@ -211,9 +211,8 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
         if not check_imm_range(d, 18):
             error('displacement (' + disp + ') is too large')
         d >>= 2
-    else:
-        if not -0x8000 <= d <= 0xffff:
-            error('immediate value (' + imm + ') is too large')
+    elif not -0x8000 <= d <= 0xffff:
+        error('immediate value (' + imm + ') is too large')
     c1 = (op << 4) + (x >> 1)
     c2 = ((x & 1) << 7) + (a << 2) + pred
     c3 = (d >> 8) & 255
@@ -475,8 +474,8 @@ def expand_ret(operands):
     return [('jr', ['r28'])]
 
 def expand_enter(operands):
-    check_operands_n(operands, 1)
-    success, imm = parse_imm(operands[0])
+    check_operands_n(operands, 0, 1)
+    success, imm = parse_imm(operands[0] if operands else '0')
     if success:
         if imm & 3 != 0:
             error('immediate value must be a multiple of 4')
