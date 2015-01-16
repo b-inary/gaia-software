@@ -96,7 +96,7 @@ main:
     call    label
     call    r1
     ret
-    enter   123
+    enter   16
     leave
     halt
 

@@ -77,7 +77,7 @@ def parse_memaccess(operand):
     m = re.match(r'\[(r\w+)\s*([+-])\s*(\w+)\]$', operand)
     if m:
         base = m.group(1)
-        disp = m.group(2) + m.group(3)
+        disp = ('' if m.group(2) == '+' else '-') + m.group(3)
         if is_reg(base) and parse_imm(disp)[0]:
             return True, base, disp
     m = re.match(r'\[(r\w+)\]$', operand)
@@ -236,9 +236,9 @@ def on_fpu3(operands, sign, tag):
     check_operands_n(operands, 3)
     return code_f(operands[0], operands[1], operands[2], sign, tag)
 
-# def on_misc0(operands, op, pred):
-#     check_operands_n(operands, 2)
-#     return code_m(op, 'r0', 'r0', pred, '0')
+# def on_misc0(operands, op, pred, disp_mode):
+#     check_operands_n(operands, 0)
+#     return code_m(op, 'r0', 'r0', pred, '0', disp_mode)
 
 def on_misc1(operands, op, pred, disp_mode):
     check_operands_n(operands, 1)
@@ -478,6 +478,8 @@ def expand_enter(operands):
     check_operands_n(operands, 1)
     success, imm = parse_imm(operands[0])
     if success:
+        if imm & 3 != 0:
+            error('immediate value must be a multiple of 4')
         return expand_alu('sub', ['rsp', 'rsp', str(imm + 4)]) + [('st', ['r28', 'rsp', '0'])]
     error('expected integer literal: ' + operands[0])
 
@@ -736,11 +738,11 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
-                    next_line = ('ldh', [operands[0], operands[0], str(int(operands[1]) >> 16)])
-                    operands[1] = str(int(operands[1]) & 0xffff)
+                    next_line = ('ldh', [operands[0], operands[0], '{:#06x}'.format(int(operands[1]) >> 16)])
                 elif not check_imm_range(int(operands[1]), 16):
                     error('label out of range')
                 mnemonic = 'ldl'
+                operands[1] = '{:#06x}'.format(int(operands[1]) & 0xffff)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
             operands[-1] = label_addr(operands[-1], i, True)
@@ -755,8 +757,12 @@ for mnemonic, operands, filename, pos in lines1:
 if args.s:
     with open(args.o + '.s', 'w') as f:
         ofs = 0
+        prev_file = ''
         for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
-            s = '{:#08x}  {:7} {:17} '.format(entry_point + 4 * (i + ofs), mnemonic, ', '.join(operands))
+            if prev_file != filename:
+                print >> f, '\n# file: ' + filename
+                prev_file = filename
+            s = '{:#08x}  {:7} {:19} '.format(entry_point + 4 * (i + ofs), mnemonic, ', '.join(operands))
             print >> f, (s + show_label(i + ofs)).rstrip()
             if mnemonic == '.int':
                 ofs += int(operands[1], 0) - 1
