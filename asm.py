@@ -74,16 +74,16 @@ def float_to_bit(f):
         error('floating point value is too large')
 
 def parse_memaccess(operand):
-    m = re.match(r'\[(r\w+)\s*([+-])\s*(\w+)\]$', operand)
+    m = re.match(r'\[\s*(r\w+)\s*([+-])\s*(\w+)\s*\]$', operand)
     if m:
         base = m.group(1)
         disp = ('' if m.group(2) == '+' else '-') + m.group(3)
         if is_reg(base) and parse_imm(disp)[0]:
             return True, base, disp
-    m = re.match(r'\[(r\w+)\]$', operand)
+    m = re.match(r'\[\s*(r\w+)\s*\]$', operand)
     if m and is_reg(m.group(1)):
         return True, m.group(1), '0'
-    m = re.match(r'\[([+-]?\w+)\]$', operand)
+    m = re.match(r'\[\s*([+-]?\s*\w+)\s*\]$', operand)
     if m and parse_imm(m.group(1))[0]:
         return True, 'r0', m.group(1)
     return False, 'r0', '0'
@@ -315,7 +315,7 @@ def expand_mov(operands):
         success, base, disp = parse_memaccess(operands[1])
         if success:
             return [('ld', [operands[0], base, disp])]
-        return [('ld', [operands[0], 'r0', operands[1][1:-1]])]
+        return [('ld', [operands[0], 'r0', operands[1][1:-1].strip()])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
         pre = []
         if not is_reg(operands[1]):
@@ -324,7 +324,7 @@ def expand_mov(operands):
         success, base, disp = parse_memaccess(operands[0])
         if success:
             return pre + [('st', [operands[1], base, disp])]
-        return pre + [('st', [operands[1], 'r0', operands[0][1:-1]])]
+        return pre + [('st', [operands[1], 'r0', operands[0][1:-1].strip()])]
     success, imm = parse_imm(operands[1])
     if success:
         return mov_imm(operands[0], imm)
