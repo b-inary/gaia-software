@@ -97,6 +97,7 @@ void write(uint32_t x)
     switch (write_mode) {
         case RAW:
             putchar(x & 255);
+            fflush(stdout);
             return;
         case HEX:
             if ((write_pos & 15) == 0)
