@@ -5,12 +5,12 @@
 #include <math.h>
 #include <string.h>
 
-#define MEM_SIZE    0x100000
 #define ENTRY_POINT 0x4000
 #define HALT_CODE   0xffffffff
 
 uint32_t reg[32];
-uint32_t mem[MEM_SIZE];
+uint32_t *mem;
+uint32_t mem_size = 0x400000;
 uint32_t pc;
 uint32_t prog_size;
 long long inst_cnt;
@@ -110,13 +110,13 @@ uint32_t to_physical(uint32_t addr)
     uint32_t tmp;
     if (mem[0x3ff8 >> 2] == 0) return addr;
     tmp = mem[0x3ffc >> 2] | ((addr >> 22) << 2);
-    if (tmp & 3 || tmp >= (MEM_SIZE << 2))
+    if (tmp & 3 || tmp >= mem_size)
         error("to_physical: PDE address error: 0x%08x", tmp);
     tmp = mem[tmp >> 2];
     if ((tmp & 1) == 0)
         error("to_physical: invalid PDE");
     tmp = (tmp & ~0x0fff) | (((addr >> 12) & 0x03ff) << 2);;
-    if (tmp >= (MEM_SIZE << 2))
+    if (tmp >= mem_size)
         error("to_physical: PTE address error: 0x%08x", tmp);
     tmp = mem[tmp >> 2];
     if ((tmp & 1) == 0)
@@ -142,7 +142,7 @@ uint32_t load(int ra, uint32_t disp)
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
     if (addr & 3)
         error("load: address must be a multiple of 4: 0x%08x", addr);
-    if (addr >= (MEM_SIZE << 2))
+    if (addr >= mem_size)
         error("load: exceed 4MB limit: 0x%08x", addr);
     switch (addr) {
         case 0x3000: return 1;
@@ -157,7 +157,7 @@ void store(int ra, uint32_t disp, uint32_t x)
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
     if (addr & 3)
         error("store: address must be a multiple of 4: 0x%08x", addr);
-    if (addr >= (MEM_SIZE << 2))
+    if (addr >= mem_size)
         error("store: exceed 4MB limit: 0x%08x", addr);
     if (addr == 0x300c)
         write(x);
@@ -238,8 +238,9 @@ void exec(uint32_t inst)
 
 void init_env()
 {
-    reg[30] = MEM_SIZE << 2;
-    reg[31] = MEM_SIZE << 2;
+    mem = malloc(mem_size);
+    reg[30] = mem_size;
+    reg[31] = mem_size;
     pc = ENTRY_POINT;
     prog_size = 0;
     inst_cnt = 0;
@@ -273,26 +274,30 @@ void runsim()
         pc += 4;
         ++inst_cnt;
     }
+    free(mem);
 }
 
 void print_help(char *prog)
 {
     fprintf(stderr, "usage: %s [options] file\n", prog);
     fprintf(stderr, "options:\n");
-    fprintf(stderr, "  -stat           show simulator status\n");
+    fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
+    fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
 }
 
 void parse_cmd(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-stat") == 0) {
+        if (strcmp(argv[i], "-msize") == 0) {
+            if (i == argc - 1) print_help(argv[0]);
+            mem_size = atoi(argv[++i]) << 20;
+        } else if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
+        } else if (infile[0] != '\0') {
+            fprintf(stderr, "error: multiple input files are specified\n");
+            print_help(argv[0]);
         } else {
-            if (infile[0] != '\0') {
-                fprintf(stderr, "error: multiple input files are specified\n");
-                print_help(argv[0]);
-            }
             strcpy(infile, argv[i]);
         }
     }
