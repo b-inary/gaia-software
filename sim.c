@@ -15,11 +15,6 @@ uint32_t pc;
 uint32_t prog_size;
 long long inst_cnt;
 
-enum IOMode { RAW, HEX, INT, FLOAT };
-enum IOMode read_mode = RAW, write_mode = RAW;
-int read_pos, write_pos;
-int read_buf[4], write_buf[4];
-
 char infile[128];
 int show_stat = 0;
 
@@ -59,67 +54,6 @@ float bitfloat(uint32_t x)
     union { uint32_t i; float f; } u;
     u.i = x;
     return u.f;
-}
-
-uint32_t read()
-{
-    int i;
-    uint32_t u;
-    float f;
-    switch (read_mode) {
-        case RAW:
-            i = getchar();
-            if (i == EOF) error("read error");
-            return i;
-        case HEX:
-            if (scanf("%x", &u) < 1) error("read error");
-            if (u > 255) error("read: invalid input");
-            return u;
-        default:
-            if (read_pos == 4) {
-                if (read_mode == INT) {
-                    if (scanf("%i", &i) < 1) error("read error");
-                    u = i;
-                } else {
-                    if (scanf("%f", &f) < 1) error("read error");
-                    u = bitint(f);
-                }
-                for (int i = 3; i >= 0; --i)
-                    read_buf[i] = u & 255, u >>= 8;
-                read_pos = 0;
-            }
-            return read_buf[read_pos++];
-    }
-}
-
-void write(uint32_t x)
-{
-    switch (write_mode) {
-        case RAW:
-            putchar(x & 255);
-            fflush(stdout);
-            return;
-        case HEX:
-            if ((write_pos & 15) == 0)
-                printf("0x%06x", write_pos);
-            printf(" %02x", x & 255);
-            if ((++write_pos & 15) == 0)
-                printf("\n");
-            return;
-        default:
-            write_buf[write_pos++] = x & 255;
-            if (write_pos == 4) {
-                x = 0;
-                for (int i = 0; i < 4; ++i)
-                    x <<= 8, x += write_buf[i];
-                if (write_mode == INT)
-                    printf("%d\n", x);
-                else
-                    printf("%f\n", bitfloat(x));
-                write_pos = 0;
-            }
-            return;
-    }
 }
 
 uint32_t alu(int tag, int ra, int rb, uint32_t lit)
@@ -188,6 +122,19 @@ uint32_t mmu(uint32_t addr)
     if ((tmp & 1) == 0)
         error("mmu: invalid PTE");
     return (tmp & ~0x0fff) | (addr & 0x0fff);
+}
+
+uint32_t read()
+{
+    int res = getchar();
+    if (res == EOF) error("read: reached EOF");
+    return res;
+}
+
+void write(uint32_t x)
+{
+    putchar(x);
+    fflush(stdout);
 }
 
 uint32_t load(int ra, uint32_t disp)
@@ -292,8 +239,6 @@ void init_env()
     pc = ENTRY_POINT;
     prog_size = 0;
     inst_cnt = 0;
-    read_pos = 4;
-    write_pos = 0;
 }
 
 void load_file()
@@ -324,42 +269,20 @@ void runsim()
         pc += 4;
         ++inst_cnt;
     }
-    if (write_mode == HEX && write_pos & 15)
-        printf("\n");
 }
 
 void print_help(char *prog)
 {
     printf("usage: %s [options] file\n", prog);
     printf("options:\n");
-    printf("  -read <mode>    set read mode\n");
-    printf("  -write <mode>   set write mode\n");
     printf("  -stat           show simulator status\n");
-    printf("mode:\n");
-    printf("  raw, hex, int, float (default: raw)\n");
     exit(1);
-}
-
-enum IOMode get_mode(char *mode, char *prog)
-{
-    if (strcmp(mode, "raw") == 0) return RAW;
-    if (strcmp(mode, "hex") == 0) return HEX;
-    if (strcmp(mode, "int") == 0) return INT;
-    if (strcmp(mode, "float") == 0) return FLOAT;
-    print_help(prog);
-    return RAW; // suppress warning
 }
 
 void parse_cmd(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-read") == 0) {
-            if (i == argc - 1) print_help(argv[0]);
-            read_mode = get_mode(argv[++i], argv[0]);
-        } else if (strcmp(argv[i], "-write") == 0) {
-            if (i == argc - 1) print_help(argv[0]);
-            write_mode = get_mode(argv[++i], argv[0]);
-        } else if (strcmp(argv[i], "-stat") == 0) {
+        if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
         } else {
             if (infile[0] != '\0') print_help(argv[0]);
