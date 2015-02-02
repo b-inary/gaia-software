@@ -211,7 +211,10 @@ void exec_misc(uint32_t inst)
             pc += disp << 2;
             return;
         case 12:
-            if (reg[rx] & 3) error("jr: register corrupted: r%d", rx);
+            if (reg[rx] & 3)
+                error("jr: register corrupted: r%d", rx);
+            if (reg[rx] >= ENTRY_POINT + prog_size)
+                error("jr: jump destination out of range: r%d", rx);
             pc = reg[rx] - 4;
             return;
         case 13:
