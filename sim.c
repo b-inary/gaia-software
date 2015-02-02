@@ -140,8 +140,10 @@ void write(uint32_t x)
 uint32_t load(int ra, uint32_t disp)
 {
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
-    if (addr & 3 || addr >= (MEM_SIZE << 2))
-        error("load: invalid address: 0x%08x", addr);
+    if (addr & 3)
+        error("load: address must be a multiple of 4: 0x%08x", addr);
+    if (addr >= (MEM_SIZE << 2))
+        error("load: exceed 4MB limit: 0x%08x", addr);
     switch (addr) {
         case 0x3000: return 1;
         case 0x3004: return read();
@@ -153,8 +155,10 @@ uint32_t load(int ra, uint32_t disp)
 void store(int ra, uint32_t disp, uint32_t x)
 {
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
-    if (addr & 3 || addr >= (MEM_SIZE << 2))
-        error("store: invalid address: 0x%08x", addr);
+    if (addr & 3)
+        error("store: address must be a multiple of 4: 0x%08x", addr);
+    if (addr >= (MEM_SIZE << 2))
+        error("store: exceed 4MB limit: 0x%08x", addr);
     if (addr == 0x300c)
         write(x);
     else
@@ -273,9 +277,9 @@ void runsim()
 
 void print_help(char *prog)
 {
-    printf("usage: %s [options] file\n", prog);
-    printf("options:\n");
-    printf("  -stat           show simulator status\n");
+    fprintf(stderr, "usage: %s [options] file\n", prog);
+    fprintf(stderr, "options:\n");
+    fprintf(stderr, "  -stat           show simulator status\n");
     exit(1);
 }
 
@@ -285,7 +289,10 @@ void parse_cmd(int argc, char *argv[])
         if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
         } else {
-            if (infile[0] != '\0') print_help(argv[0]);
+            if (infile[0] != '\0') {
+                fprintf(stderr, "error: multiple input files are specified\n");
+                print_help(argv[0]);
+            }
             strcpy(infile, argv[i]);
         }
     }
