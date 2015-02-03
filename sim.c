@@ -17,6 +17,7 @@ long long inst_cnt;
 
 char infile[128];
 int show_stat = 0;
+int eof_error = 0;
 
 void print_env()
 {
@@ -127,7 +128,7 @@ uint32_t to_physical(uint32_t addr)
 uint32_t read()
 {
     int res = getchar();
-    if (res == EOF) error("read: reached EOF");
+    if (res == EOF && eof_error) error("read: reached EOF");
     return res;
 }
 
@@ -143,7 +144,7 @@ uint32_t load(int ra, uint32_t disp)
     if (addr & 3)
         error("load: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
-        error("load: exceed 4MB limit: 0x%08x", addr);
+        error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
     switch (addr) {
         case 0x3000: return 1;
         case 0x3004: return read();
@@ -158,7 +159,7 @@ void store(int ra, uint32_t disp, uint32_t x)
     if (addr & 3)
         error("store: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
-        error("store: exceed 4MB limit: 0x%08x", addr);
+        error("store: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
     if (addr == 0x300c)
         write(x);
     else
@@ -284,6 +285,7 @@ void print_help(char *prog)
 {
     fprintf(stderr, "usage: %s [options] file\n", prog);
     fprintf(stderr, "options:\n");
+    fprintf(stderr, "  -eof-error        disallow reading EOF\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
     fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
@@ -292,7 +294,9 @@ void print_help(char *prog)
 void parse_cmd(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-msize") == 0) {
+        if (strcmp(argv[i], "-eof-error") == 0) {
+            eof_error = 1;
+        } else if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
         } else if (strcmp(argv[i], "-stat") == 0) {
