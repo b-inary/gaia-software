@@ -4,8 +4,17 @@
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
+#include <sys/time.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <termios.h>
 
 #define HALT_CODE   0xffffffff
+
+#define IRQ_PSEUDO   0
+#define IRQ_TIMER    1
+#define IRQ_SERIAL   2
+#define IRQ_SYSENTER 3
 
 uint32_t reg[32];
 uint32_t *mem;
@@ -13,12 +22,14 @@ uint32_t mem_size = 0x400000;
 uint32_t entry_point = 0x3000;
 uint32_t pc;
 uint32_t prog_size;
+uint32_t irq_bits;
 long long inst_cnt;
 
 char infile[128];
 int show_stat, boot_test;
 
 uint32_t to_physical(uint32_t);
+void restore_term();
 
 void print_env()
 {
@@ -41,6 +52,7 @@ void error(char *fmt, ...)
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\x1b[0m\n\n");
     print_env();
+    restore_term();
     va_end(ap);
     exit(1);
 }
@@ -57,6 +69,15 @@ float bitfloat(uint32_t x)
     union { uint32_t i; float f; } u;
     u.i = x;
     return u.f;
+}
+
+// Find the last bit set in a word, the opposite of ffs.
+int fls(uint32_t i)
+{
+    if (i == 0) return 0;
+    int res = 0;
+    while ((i & (1 << res)) == 0) res++;
+    return res + 1;
 }
 
 uint32_t alu(int tag, int ra, int rb, uint32_t lit)
@@ -127,6 +148,15 @@ uint32_t to_physical(uint32_t addr)
     return (tmp & ~0x0fff) | (addr & 0x0fff);
 }
 
+int has_input()
+{
+    struct timeval zero = {0, 0};
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+    return select(1, &fds, NULL, NULL, &zero);
+}
+
 uint32_t read()
 {
     int res = getchar();
@@ -147,8 +177,12 @@ uint32_t load(int ra, uint32_t disp)
         error("load: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x2000) return read();
-    else return mem[addr >> 2];
+    switch (addr) {
+        case 0x2000: return read();
+        case 0x2004: return has_input();
+        case 0x2008: return 1;
+        default:     return mem[addr >> 2];
+    }
 }
 
 void store(int ra, uint32_t disp, uint32_t x)
@@ -197,8 +231,14 @@ void exec_misc(uint32_t inst)
         case 3:
             reg[rx] = (disp << 16) | (reg[ra] & 0xffff);
             return;
-        case 4: case 5:
-            error("sysenter/sysexit is not implemented yet");
+        case 4:
+            irq_bits |= 1 << IRQ_SYSENTER;
+            return;
+        case 5:
+            pc = mem[0x2108 >> 2];
+            mem[0x2104 >> 2] = 1;
+            if (mem[0x210c >> 2] != 0) // Cause of interrupt
+                irq_bits &= ~(1 << mem[0x210c >> 2]);
             return;
         case 6:
             store(ra, disp, reg[rx]);
@@ -239,6 +279,34 @@ void exec(uint32_t inst)
     }
 }
 
+void update_irqbits()
+{
+    static struct timeval tick;
+    struct timeval now;
+
+    // TIMER
+    gettimeofday(&now, NULL);
+    if ((now.tv_sec - tick.tv_sec) * 1000000 + now.tv_usec - tick.tv_usec > 1000000 / 100) {
+        irq_bits |= 1 << IRQ_TIMER;
+        gettimeofday(&tick, NULL);
+    }
+
+    // SERIAL
+    if (has_input())
+        irq_bits |= 1 << IRQ_SERIAL;
+}
+
+void interrupt()
+{
+    update_irqbits();
+    if (irq_bits && mem[0x2104 >> 2]) {
+        mem[0x210c >> 2] = fls(irq_bits) - 1; // IRQ number
+        mem[0x2108 >> 2] = pc;
+        mem[0x2104 >> 2] = 0;
+        pc = mem[0x2100 >> 2] - 4;
+    }
+}
+
 void init_env()
 {
     free(mem);
@@ -248,13 +316,31 @@ void init_env()
     pc = entry_point;
     prog_size = 0;
     inst_cnt = 0;
+    irq_bits = 0;
+}
+
+void init_term()
+{
+    struct termios ttystate;
+    tcgetattr(0, &ttystate);
+    ttystate.c_lflag &= ~ICANON & ~ECHO;
+    tcsetattr(0, TCSANOW, &ttystate);
+}
+
+void restore_term()
+{
+    struct termios ttystate;
+    tcgetattr(0, &ttystate);
+    ttystate.c_lflag |= ICANON | ECHO;
+    tcsetattr(0, TCSANOW, &ttystate);
 }
 
 void load_file()
 {
     int inst;
     FILE *fp = fopen(infile, "r");
-    if (fp == NULL) { perror(infile); exit(1); }
+    if (fp == NULL)
+        error(strerror(errno));
     while (1) {
         inst = fgetc(fp);
         if (inst == EOF) return;
@@ -275,6 +361,7 @@ void runsim()
             error("program counter out of range");
         if (mem[to_physical(pc) >> 2] == HALT_CODE) break;
         exec(mem[to_physical(pc) >> 2]);
+        interrupt();
         pc += 4;
         ++inst_cnt;
     }
@@ -314,6 +401,7 @@ int main(int argc, char *argv[])
 {
     parse_cmd(argc, argv);
     if (infile[0] == '\0') print_help(argv[0]);
+    init_term();
     runsim();
     if (show_stat) print_env();
     return 0;
