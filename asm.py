@@ -669,7 +669,7 @@ argparser.add_argument('-n', help='assure long label assignment does not appear'
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
-argparser.add_argument('-w', help='suppress warnings', action='store_true')
+argparser.add_argument('-Wno-unused-label', help='suppress unused label warnings', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
@@ -749,7 +749,7 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
 for mnemonic, operands, filename, pos in lines1:
     if mnemonic == '.global':
         check_global(operands[0])
-    if mnemonic[-1] == ':' and not args.w:
+    if mnemonic[-1] == ':' and not args.Wno_unused_label:
         warn_unused_label(mnemonic[:-1])
 
 # 3. assemble
