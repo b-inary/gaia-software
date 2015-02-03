@@ -16,8 +16,7 @@ uint32_t prog_size;
 long long inst_cnt;
 
 char infile[128];
-int show_stat = 0;
-int eof_error = 0;
+int eof_error, show_stat;
 
 void print_env()
 {
@@ -242,6 +241,7 @@ void exec(uint32_t inst)
 
 void init_env()
 {
+    free(mem);
     mem = malloc(mem_size);
     reg[30] = mem_size;
     reg[31] = mem_size;
@@ -278,7 +278,6 @@ void runsim()
         pc += 4;
         ++inst_cnt;
     }
-    free(mem);
 }
 
 void print_help(char *prog)
