@@ -200,6 +200,9 @@ void exec_misc(uint32_t inst)
         case 3:
             reg[rx] = (disp << 16) | (reg[ra] & 0xffff);
             return;
+        case 4: case 5:
+            error("sysenter/sysexit is not implemented yet");
+            return;
         case 6:
             store(ra, disp, reg[rx]);
             return;

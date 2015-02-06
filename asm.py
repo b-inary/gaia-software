@@ -145,10 +145,10 @@ fpu3_table = {
     'fdiv':      3,
 }
 
-# misc0_table = {
-#     'sysenter':  4,
-#     'sysexit':   5,
-# }
+misc0_table = {
+    'sysenter':  4,
+    'sysexit':   5,
+}
 
 misc1_table = {
     'jr':       12,
@@ -235,9 +235,9 @@ def on_fpu3(operands, sign, tag):
     check_operands_n(operands, 3)
     return code_f(operands[0], operands[1], operands[2], sign, tag)
 
-# def on_misc0(operands, op, pred, disp_mode):
-#     check_operands_n(operands, 0)
-#     return code_m(op, 'r0', 'r0', pred, '0', disp_mode)
+def on_misc0(operands, op, pred, disp_mode):
+    check_operands_n(operands, 0)
+    return code_m(op, 'r0', 'r0', pred, '0', disp_mode)
 
 def on_misc1(operands, op, pred, disp_mode):
     check_operands_n(operands, 1)
@@ -278,8 +278,8 @@ def code(mnemonic, operands):
         mnemonic = 'bne'
     if mnemonic in ['beq-', 'beq+']:
         mnemonic = 'beq'
-    # if mnemonic in misc0_table:
-    #     return on_misc0(operands, misc0_table[mnemonic], pred, disp_mode)
+    if mnemonic in misc0_table:
+        return on_misc0(operands, misc0_table[mnemonic], pred, disp_mode)
     if mnemonic in misc1_table:
         return on_misc1(operands, misc1_table[mnemonic], pred, disp_mode)
     if mnemonic in misc2_table:

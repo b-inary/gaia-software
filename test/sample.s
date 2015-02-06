@@ -38,6 +38,8 @@ main:
     floor   r1, r2
     ldl     r1, 2
     ldh     r1, r2, 3
+    sysenter
+    sysexit
     st      r1, r2, 4
     ld      r1, r2, 4
     jl      r1, 4
