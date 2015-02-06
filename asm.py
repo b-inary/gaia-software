@@ -398,15 +398,15 @@ def expand_fcmpge(operands):
 
 def expand_read(operands):
     check_operands_n(operands, 1)
-    return [('ld', ['r29', 'r0', '0x3000']),
+    return [('ld', ['r29', 'r0', '0x2004']),
             ('beq', ['r29', 'r0', '-8']),
-            ('ld', [operands[0], 'r0', '0x3004'])]
+            ('ld', [operands[0], 'r0', '0x2000'])]
 
 def expand_write(operands):
     check_operands_n(operands, 1)
-    return [('ld', ['r29', 'r0', '0x3008']),
+    return [('ld', ['r29', 'r0', '0x2008']),
             ('beq', ['r29', 'r0', '-8']),
-            ('st', [operands[0], 'r0', '0x300c'])]
+            ('st', [operands[0], 'r0', '0x2000'])]
 
 def expand_br(operands):
     check_operands_n(operands, 1)
@@ -557,7 +557,7 @@ def expand_macro(line):
 labels = {}
 rev_labels = {}
 library = ''
-entry_point = 0x4000
+entry_point = 0x3000
 
 def add_label(label, i):
     dic = labels.get(label, {})

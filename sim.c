@@ -5,7 +5,7 @@
 #include <math.h>
 #include <string.h>
 
-#define ENTRY_POINT 0x4000
+#define ENTRY_POINT 0x3000
 #define HALT_CODE   0xffffffff
 
 uint32_t reg[32];
@@ -108,8 +108,8 @@ uint32_t fpu_sign(uint32_t x, int mode)
 uint32_t to_physical(uint32_t addr)
 {
     uint32_t tmp;
-    if (mem[0x3ff8 >> 2] == 0) return addr;
-    tmp = mem[0x3ffc >> 2] | ((addr >> 22) << 2);
+    if (mem[0x2200 >> 2] == 0) return addr;
+    tmp = mem[0x2204 >> 2] | ((addr >> 22) << 2);
     if (tmp & 3 || tmp >= mem_size)
         error("to_physical: PDE address error: 0x%08x", tmp);
     tmp = mem[tmp >> 2];
@@ -145,9 +145,9 @@ uint32_t load(int ra, uint32_t disp)
     if (addr >= mem_size)
         error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
     switch (addr) {
-        case 0x3000: return 1;
-        case 0x3004: return read();
-        case 0x3008: return 1;
+        case 0x2000: return read();
+        case 0x2004: return 1;
+        case 0x2008: return 1;
         default:     return mem[addr >> 2];
     }
 }
@@ -159,10 +159,8 @@ void store(int ra, uint32_t disp, uint32_t x)
         error("store: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("store: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x300c)
-        write(x);
-    else
-        mem[addr >> 2] = x;
+    if (addr == 0x2000) write(x);
+    else mem[addr >> 2] = x;
 }
 
 void exec_alu(uint32_t inst)
