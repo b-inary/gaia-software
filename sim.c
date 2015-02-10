@@ -18,6 +18,8 @@ long long inst_cnt;
 char infile[128];
 int show_stat, boot_test;
 
+uint32_t to_physical(uint32_t);
+
 void print_env()
 {
     fprintf(stderr, "\x1b[1m*** Simulator Status ***\x1b[0m\n");
@@ -27,7 +29,7 @@ void print_env()
             fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
                     i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
     }
-    fprintf(stderr, "<Current PC>: 0x%06x\n", pc);
+    fprintf(stderr, "<Current Virtual PC>: 0x%08x, <Current Physical PC>: 0x%06x\n", pc, to_physical(pc));
     fprintf(stderr, "<Number of executed instructions>: %lld\n", inst_cnt);
 }
 
@@ -211,7 +213,7 @@ void exec_misc(uint32_t inst)
         case 12:
             if (reg[rx] & 3)
                 error("jr: register corrupted: r%d", rx);
-            if (reg[rx] >= entry_point + prog_size && !boot_test)
+            if (to_physical(reg[rx]) >= entry_point + prog_size && !boot_test)
                 error("jr: jump destination out of range: r%d", rx);
             pc = reg[rx] - 4;
             return;
@@ -269,10 +271,10 @@ void runsim()
     init_env();
     load_file();
     while (1) {
-        if (pc >= entry_point + prog_size && !boot_test)
+        if (to_physical(pc) >= entry_point + prog_size)
             error("program counter out of range");
-        if (mem[pc >> 2] == HALT_CODE) break;
-        exec(mem[pc >> 2]);
+        if (mem[to_physical(pc) >> 2] == HALT_CODE) break;
+        exec(mem[to_physical(pc) >> 2]);
         pc += 4;
         ++inst_cnt;
     }
