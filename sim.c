@@ -20,23 +20,24 @@ int show_stat;
 
 void print_env()
 {
-    fprintf(stderr, "*** simulator status ***\n");
-    fprintf(stderr, "<register>\n");
-    for (int i = 0; i < 16; ++i)
-        fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
-                i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
-    fprintf(stderr, "<program counter>: 0x%08x\n", pc);
-    fprintf(stderr, "<current instruction>: 0x%08x\n", mem[pc >> 2]);
-    fprintf(stderr, "<number of executed instructions>: %lld\n", inst_cnt);
+    fprintf(stderr, "\x1b[1m*** Simulator Status ***\x1b[0m\n");
+    if (show_stat) {
+        fprintf(stderr, "<register>\n");
+        for (int i = 0; i < 16; ++i)
+            fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
+                    i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
+    }
+    fprintf(stderr, "<Current PC>: 0x%06x\n", pc);
+    fprintf(stderr, "<Number of executed instructions>: %lld\n", inst_cnt);
 }
 
 void error(char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    fprintf(stderr, "error: ");
+    fprintf(stderr, "\x1b[1;31mruntime error: \x1b[39m");
     vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\x1b[0m\n\n");
     print_env();
     va_end(ap);
     exit(1);
