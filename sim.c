@@ -144,12 +144,8 @@ uint32_t load(int ra, uint32_t disp)
         error("load: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    switch (addr) {
-        case 0x2000: return read();
-        case 0x2004: return 1;
-        case 0x2008: return 1;
-        default:     return mem[addr >> 2];
-    }
+    if (addr == 0x2000) return read();
+    else return mem[addr >> 2];
 }
 
 void store(int ra, uint32_t disp, uint32_t x)
