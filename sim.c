@@ -16,7 +16,7 @@ uint32_t prog_size;
 long long inst_cnt;
 
 char infile[128];
-int eof_error, show_stat;
+int show_stat;
 
 void print_env()
 {
@@ -127,7 +127,7 @@ uint32_t to_physical(uint32_t addr)
 uint32_t read()
 {
     int res = getchar();
-    if (res == EOF && eof_error) error("read: reached EOF");
+    if (res == EOF) error("read: reached EOF");
     return res;
 }
 
@@ -285,7 +285,6 @@ void print_help(char *prog)
 {
     fprintf(stderr, "usage: %s [options] file\n", prog);
     fprintf(stderr, "options:\n");
-    fprintf(stderr, "  -eof-error        disallow reading EOF\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
     fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
@@ -294,9 +293,7 @@ void print_help(char *prog)
 void parse_cmd(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-eof-error") == 0) {
-            eof_error = 1;
-        } else if (strcmp(argv[i], "-msize") == 0) {
+        if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
         } else if (strcmp(argv[i], "-stat") == 0) {
