@@ -182,7 +182,7 @@ def code_i(rx, ra, rb, imm, tag):
     if not success:
         error('expected integer literal: ' + imm)
     if not check_imm_range(i, 8):
-        error('immediate value (' + imm + ') is too large')
+        error('immediate value too large: ' + imm)
     c1 = x >> 1
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
     c3 = ((b & 7) << 5) + ((i >> 3) & 31)
@@ -212,7 +212,7 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
             error('displacement (' + disp + ') is too large')
         d >>= 2
     elif not -0x8000 <= d <= 0xffff:
-        error('immediate value (' + imm + ') is too large')
+        error('immediate value too large: ' + imm)
     c1 = (op << 4) + (x >> 1)
     c2 = ((x & 1) << 7) + (a << 2) + pred
     c3 = (d >> 8) & 255
@@ -256,7 +256,7 @@ def on_dot_int(operand):
     if not success:
         error('expected integer literal: ' + operands[0])
     if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value (' + operand + ') is too large')
+        error('immediate value too large: ' + operand)
     cnt = int(operands[1], 0)
     return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
@@ -302,6 +302,8 @@ def expand_nop(operands):
 def mov_imm(dest, imm):
     if check_imm_range(imm, 16):
         return [('ldl', [dest, str(imm)])]
+    if not -0x80000000 <= imm <= 0xffffffff:
+        error('immediate value too large')
     if imm & 0xffff == 0:
         return [('ldh', [dest, 'r0', str((imm >> 16) & 0xffff)])]
     return [('ldl', [dest, str(imm & 0xffff)]),
@@ -554,7 +556,7 @@ def expand_macro(line):
 
 labels = {}
 rev_labels = {}
-library = ''
+library = []
 entry_point = 0x3000
 
 def add_label(label, i):
@@ -628,6 +630,8 @@ def label_addr(label, cur, rel):
             fatal('global label \'main\' is required')
         else:
             error('label \'{}\' is not declared'.format(label))
+    if len(decl) > 1 and not set(decl) <= set(library):
+        decl = list(set(decl) - set(library))
     if len(decl) > 1:
         msg = 'label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(sorted(decl)))
         if label == 'main':
@@ -642,7 +646,7 @@ def check_global(label):
         error('label \'{}\' is not declared'.format(label))
 
 def warn_unused_label(label):
-    if not labels[label][filename][2] and not (filename == library and labels[label][filename][1]):
+    if not labels[label][filename][2] and not (filename in library and labels[label][filename][1]):
         warning('unused label \'{}\''.format(label))
 
 def show_label(i):
@@ -662,7 +666,7 @@ argparser.add_argument('-a', help='output as rs232c send test format', action='s
 argparser.add_argument('-e', help='set entry point address', metavar='<integer>')
 argparser.add_argument('-f', help='append label to end of program', metavar='<label>')
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
-argparser.add_argument('-l', help='set library file to <file>', metavar='<file>')
+argparser.add_argument('-l', help='set library file to <file>', metavar='<file>', action='append')
 argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
@@ -673,8 +677,8 @@ if args.inputs == []:
     argparser.print_help(sys.stderr)
     sys.exit(1)
 if args.l:
-    library = os.path.relpath(args.l)
-    args.inputs = [library] + args.inputs
+    library = map(os.path.relpath, args.l)
+    args.inputs = library + args.inputs
 if not args.o:
     args.o = 'a.out'
 if args.e:
