@@ -5,18 +5,18 @@
 #include <math.h>
 #include <string.h>
 
-#define ENTRY_POINT 0x3000
 #define HALT_CODE   0xffffffff
 
 uint32_t reg[32];
 uint32_t *mem;
 uint32_t mem_size = 0x400000;
+uint32_t entry_point = 0x3000;
 uint32_t pc;
 uint32_t prog_size;
 long long inst_cnt;
 
 char infile[128];
-int show_stat;
+int show_stat, boot_test;
 
 void print_env()
 {
@@ -211,7 +211,7 @@ void exec_misc(uint32_t inst)
         case 12:
             if (reg[rx] & 3)
                 error("jr: register corrupted: r%d", rx);
-            if (reg[rx] >= ENTRY_POINT + prog_size)
+            if (reg[rx] >= entry_point + prog_size && !boot_test)
                 error("jr: jump destination out of range: r%d", rx);
             pc = reg[rx] - 4;
             return;
@@ -241,9 +241,9 @@ void init_env()
 {
     free(mem);
     mem = malloc(mem_size);
-    reg[30] = mem_size;
-    reg[31] = mem_size;
-    pc = ENTRY_POINT;
+    if (!boot_test)
+        reg[30] = reg[31] = mem_size;
+    pc = entry_point;
     prog_size = 0;
     inst_cnt = 0;
 }
@@ -258,7 +258,7 @@ void load_file()
         if (inst == EOF) return;
         for (int j = 1; j < 4; ++j)
             inst <<= 8, inst += fgetc(fp);
-        mem[(ENTRY_POINT + prog_size) >> 2] = inst;
+        mem[(entry_point + prog_size) >> 2] = inst;
         prog_size += 4;
     }
     fclose(fp);
@@ -269,7 +269,7 @@ void runsim()
     init_env();
     load_file();
     while (1) {
-        if (pc >= ENTRY_POINT + prog_size)
+        if (pc >= entry_point + prog_size && !boot_test)
             error("program counter out of range");
         if (mem[pc >> 2] == HALT_CODE) break;
         exec(mem[pc >> 2]);
@@ -282,6 +282,7 @@ void print_help(char *prog)
 {
     fprintf(stderr, "usage: %s [options] file\n", prog);
     fprintf(stderr, "options:\n");
+    fprintf(stderr, "  -boot-test        bootloader test mode\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
     fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
@@ -290,7 +291,10 @@ void print_help(char *prog)
 void parse_cmd(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-msize") == 0) {
+        if (strcmp(argv[i], "-boot-test") == 0) {
+            entry_point = 0;
+            boot_test = 1;
+        } else if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
         } else if (strcmp(argv[i], "-stat") == 0) {
