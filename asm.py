@@ -24,12 +24,14 @@ def error(msg):
     print >> sys.stderr, '  ' + srcs[filename][pos]
     sys.exit(1)
 
-def warning(msg):
+def warning(msg, show_line=False):
     if sys.stderr.isatty():
         print >> sys.stderr, '\x1b[1m{}:{}: \x1b[35mwarning:\x1b[39m'.format(filename, pos), msg
         sys.stderr.write('\x1b[0m')
     else:
         print >> sys.stderr, '{}:{}: warning:'.format(filename, pos), msg
+    if show_line:
+        print >> sys.stderr, '  ' + srcs[filename][pos]
 
 
 # ----------------------------------------------------------------------
@@ -671,7 +673,8 @@ argparser.add_argument('-n', help='assure long label assignment does not appear'
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
-argparser.add_argument('-Wno-unused-label', help='suppress unused label warnings', action='store_true')
+argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
+argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
@@ -715,6 +718,12 @@ lines1 = []
 for line, filename, pos in lines0:
     lines = expand_macro(line)
     lines1.extend(map(lambda (x, y): (x, y, filename, pos), lines))
+if args.Wr29:
+    f = p = ''
+    for mnemonic, operands, filename, pos in lines1:
+        if 'r29' in operands and not (f == filename and p == pos):
+            f, p = filename, pos
+            warning('r29 is used', True)
 
 # 2. label resolution (by 2-pass algorithm)
 long_label = False
