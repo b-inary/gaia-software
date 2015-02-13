@@ -560,8 +560,11 @@ labels = {}
 rev_labels = {}
 library = []
 entry_point = 0x3000
+long_label = False
 
 def add_label(label, i):
+    global long_label
+    long_label |= i >= 0x8000
     dic = labels.get(label, {})
     if filename in dic and dic[filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
@@ -576,19 +579,19 @@ def add_global(label):
     dic[filename] = [val[0], True, False]
     labels[label] = dic
 
-def init_label(lines, jump_main, long_label):
+def init_label(lines, jump_main):
     global labels, rev_labels, filename, pos
     labels = {}
     rev_labels = {}
     ret = []
     if jump_main:
         ret = [('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
-    i = len(ret)
+    addr = entry_point + 4 * len(ret)
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
             if len(operands) > 0:
                 error('label declaration must be followed by new line')
-            add_label(mnemonic[:-1], i)
+            add_label(mnemonic[:-1], addr)
         elif mnemonic == '.align':
             check_operands_n(operands, 1)
             success, imm = parse_imm(operands[0])
@@ -596,9 +599,9 @@ def init_label(lines, jump_main, long_label):
                 error('expected integer literal: ' + operands[0])
             if imm < 4 or (imm & (imm - 1)) > 0:
                 error('invalid alignment')
-            padding = imm - ((entry_point + (i << 2)) & (imm - 1));
+            padding = imm - (addr & (imm - 1));
             if padding < imm:
-                i += padding >> 2
+                addr += padding
                 ret.append(('.int', ['0', str(padding >> 2)], filename, pos))
         elif mnemonic == '.global':
             check_operands_n(operands, 1)
@@ -608,21 +611,22 @@ def init_label(lines, jump_main, long_label):
             success, imm = parse_imm(operands[1])
             if not success:
                 error('expected integer literal: ' + operands[1])
-            i += imm
+            addr += 4 * imm
             ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '__movl' and long_label:
-            i += 2
+            addr += 8
             ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
         else:
-            i += 1
+            addr += 4
             ret.append((mnemonic, operands, filename, pos))
-    return i, ret
+    if addr > 0x400000:
+        fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
+    return ret
 
 def label_addr(label, cur, rel):
     if parse_imm(label)[0]:
         return label
     decl = []
-    offset = -4 * (cur + 1) if rel else entry_point
     if label in labels:
         for key in labels[label]:
             if key == filename or labels[label][key][1]:
@@ -641,7 +645,8 @@ def label_addr(label, cur, rel):
         else:
             error(msg)
     labels[label][decl[0]][2] = True
-    return str(4 * labels[label][decl[0]][0] + offset)
+    offset = cur + 4 if rel else 0
+    return str(labels[label][decl[0]][0] - offset)
 
 def check_global(label):
     if labels[label][filename][0] < 0:
@@ -726,16 +731,13 @@ if args.Wr29:
             warning('r29 is used', True)
 
 # 2. label resolution (by 2-pass algorithm)
-long_label = False
-size, lines2 = init_label(lines1, not args.r, False)
-if entry_point + size * 4 >= 0x8000 and not args.n:
-    long_label = True
-    size, lines2 = init_label(lines1, not args.r, True)
-if entry_point + size * 4 >= 0x400000:
-    fatal('program size exceeds 4MB limit ({:,} + {:,} bytes)'.format(entry_point, size * 4))
+lines2 = init_label(lines1, not args.r)
+if long_label:
+    lines2 = init_label(lines1, not args.r)
 lines3 = []
+addr = entry_point
 next_line = None
-for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
+for mnemonic, operands, filename, pos in lines2:
     if next_line:
         lines3.append((next_line[0], next_line[1], filename, pos))
         next_line = None
@@ -743,7 +745,7 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
         if mnemonic in ['ld', 'st', '.int', '__movl']:
             check_operands_n(operands, 1, 3)
             idx = 0 if mnemonic == '.int' else -1
-            operands[idx] = label_addr(operands[idx], i, False)
+            operands[idx] = label_addr(operands[idx], addr, False)
             if mnemonic == '__movl':
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
@@ -755,8 +757,11 @@ for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
                 operands[1] = '{:#06x}'.format(int(operands[1]) & 0xffff)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
-            operands[-1] = label_addr(operands[-1], i, True)
+            operands[-1] = label_addr(operands[-1], addr, True)
+        if mnemonic == '.int':
+            addr += 4 * (int(operands[1], 0) - 1)
         lines3.append((mnemonic, operands, filename, pos))
+    addr += 4
 for mnemonic, operands, filename, pos in lines1:
     if mnemonic == '.global':
         check_global(operands[0])
@@ -766,16 +771,17 @@ for mnemonic, operands, filename, pos in lines1:
 # 3. assemble
 if args.s:
     with open(args.o + '.s', 'w') as f:
-        ofs = 0
+        addr = entry_point
         prev_file = ''
-        for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
+        for mnemonic, operands, filename, pos in lines3:
             if prev_file != filename:
                 print >> f, '\n# file: ' + filename
                 prev_file = filename
-            s = '{:#08x}  {:7} {:19} '.format(entry_point + 4 * (i + ofs), mnemonic, ', '.join(operands))
-            print >> f, (s + show_label(i + ofs)).rstrip()
+            s = '{:#08x}  {:7} {:19} '.format(addr, mnemonic, ', '.join(operands))
+            print >> f, (s + show_label(addr)).rstrip()
             if mnemonic == '.int':
-                ofs += int(operands[1], 0) - 1
+                addr += 4 * (int(operands[1], 0) - 1)
+            addr += 4
 with open(args.o, 'w') as f:
     for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
         byterepr = code(mnemonic, operands)
