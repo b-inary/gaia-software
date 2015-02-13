@@ -1,7 +1,7 @@
 
 TARGET = sim
 
-CFLAGS = -Wall -Wextra -O2 -std=c99 -pedantic
+CFLAGS = -Wall -Wextra -O2 -std=gnu99 -g
 LDLIBS = -lm
 
 $(TARGET):
