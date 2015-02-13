@@ -394,9 +394,10 @@ void print_help(char *prog)
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -boot-test        bootloader test mode\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
-    fprintf(stderr, "  -stat             show simulator status\n");
     fprintf(stderr, "  -no-mmu           disable MMU feature\n");
     fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
+    fprintf(stderr, "  -simple           same as '-no-mmu -no-interrupt'\n");
+    fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
 }
 
@@ -409,12 +410,15 @@ void parse_cmd(int argc, char *argv[])
         } else if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
-        } else if (strcmp(argv[i], "-stat") == 0) {
-            show_stat = 1;
         } else if (strcmp(argv[i], "-no-mmu") == 0) {
             mmu_enabled = 0;
         } else if (strcmp(argv[i], "-no-interrupt") == 0) {
             interrupt_enabled = 0;
+        } else if (strcmp(argv[i], "-simple") == 0) {
+            mmu_enabled = 0;
+            interrupt_enabled = 0;
+        } else if (strcmp(argv[i], "-stat") == 0) {
+            show_stat = 1;
         } else if (infile[0] != '\0') {
             fprintf(stderr, "error: multiple input files are specified\n");
             print_help(argv[0]);
