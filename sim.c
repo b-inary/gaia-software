@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <unistd.h>
 
 #define HALT_CODE   0xffffffff
 
@@ -24,6 +25,7 @@ uint32_t pc;
 uint32_t prog_size;
 uint32_t irq_bits;
 long long inst_cnt;
+struct termios original_ttystate;
 
 char infile[128];
 int show_stat, boot_test;
@@ -153,18 +155,23 @@ int has_input()
     struct timeval zero = {0, 0};
     fd_set fds;
     FD_ZERO(&fds);
-    FD_SET(0, &fds);
-    return select(1, &fds, NULL, NULL, &zero);
+    FD_SET(fileno(stdin), &fds);
+    return select(fileno(stdin) + 1, &fds, NULL, NULL, &zero);
 }
 
-uint32_t read()
+uint32_t serial_read()
 {
-    int res = getchar();
-    if (res == EOF) error("read: reached EOF");
+    int res;
+    if (has_input()) {
+        res = getchar();
+        if (res == EOF) error("read: reached EOF");
+    } else {
+        res = (uint32_t) -1;
+    }
     return res;
 }
 
-void write(uint32_t x)
+void serial_write(uint32_t x)
 {
     putchar(x);
     fflush(stdout);
@@ -177,12 +184,10 @@ uint32_t load(int ra, uint32_t disp)
         error("load: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    switch (addr) {
-        case 0x2000: return read();
-        case 0x2004: return has_input();
-        case 0x2008: return 1;
-        default:     return mem[addr >> 2];
-    }
+    if (addr == 0x2000)
+        return serial_read();
+    else
+        return mem[addr >> 2];
 }
 
 void store(int ra, uint32_t disp, uint32_t x)
@@ -192,7 +197,7 @@ void store(int ra, uint32_t disp, uint32_t x)
         error("store: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("store: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x2000) write(x);
+    if (addr == 0x2000) serial_write(x);
     else mem[addr >> 2] = x;
 }
 
@@ -237,7 +242,7 @@ void exec_misc(uint32_t inst)
         case 5:
             pc = mem[0x2108 >> 2];
             mem[0x2104 >> 2] = 1;
-            if (mem[0x210c >> 2] != 0) // Cause of interrupt
+            if (mem[0x210c >> 2] != IRQ_PSEUDO) // Cause of interrupt
                 irq_bits &= ~(1 << mem[0x210c >> 2]);
             return;
         case 6:
@@ -322,17 +327,19 @@ void init_env()
 void init_term()
 {
     struct termios ttystate;
-    tcgetattr(0, &ttystate);
-    ttystate.c_lflag &= ~ICANON & ~ECHO;
-    tcsetattr(0, TCSANOW, &ttystate);
+    if (!isatty(fileno(stdin)))
+        return;
+    tcgetattr(fileno(stdin), &ttystate);
+    original_ttystate = ttystate;
+    cfmakeraw(&ttystate);
+    tcsetattr(fileno(stdin), TCSANOW, &ttystate);
 }
 
 void restore_term()
 {
-    struct termios ttystate;
-    tcgetattr(0, &ttystate);
-    ttystate.c_lflag |= ICANON | ECHO;
-    tcsetattr(0, TCSANOW, &ttystate);
+    if (!isatty(fileno(stdin)))
+        return;
+    tcsetattr(fileno(stdin), TCSANOW, &original_ttystate);
 }
 
 void load_file()
@@ -404,6 +411,7 @@ int main(int argc, char *argv[])
     init_term();
     runsim();
     if (show_stat) print_env();
+    restore_term();
     return 0;
 }
 
