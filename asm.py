@@ -634,9 +634,12 @@ def label_addr(label, cur, rel):
         return label
     decl = []
     if label in labels:
-        for key in labels[label]:
-            if key == filename or labels[label][key][1]:
-                decl += [key]
+        if filename in labels[label]:
+            decl = [filename]
+        else:
+            for key in labels[label]:
+                if labels[label][key][1]:
+                    decl += [key]
     if len(decl) == 0:
         if label == 'main':
             fatal('global label \'main\' is required')
