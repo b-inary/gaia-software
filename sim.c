@@ -28,7 +28,7 @@ long long inst_cnt;
 struct termios original_ttystate;
 
 char infile[128];
-int show_stat, boot_test;
+int show_stat, boot_test, mmu_enabled = 1, interrupt_enabled = 1;
 
 uint32_t to_physical(uint32_t);
 void restore_term();
@@ -139,7 +139,7 @@ uint32_t fpu_sign(uint32_t x, int mode)
 uint32_t to_physical(uint32_t addr)
 {
     uint32_t tmp;
-    if (mem[0x2200 >> 2] == 0) return addr;
+    if (mem[0x2200 >> 2] == 0 || !mmu_enabled) return addr;
     tmp = mem[0x2204 >> 2] | ((addr >> 22) << 2);
     if (tmp & 3 || tmp >= mem_size)
         error("to_physical: PDE address error: 0x%08x", tmp);
@@ -308,6 +308,8 @@ void update_irqbits()
 
 void interrupt()
 {
+    if (!interrupt_enabled)
+        return;
     update_irqbits();
     if (irq_bits && mem[0x2104 >> 2]) {
         mem[0x210c >> 2] = fls(irq_bits) - 1; // IRQ number
@@ -332,7 +334,7 @@ void init_env()
 void init_term()
 {
     struct termios ttystate;
-    if (!isatty(fileno(stdin)))
+    if (!isatty(fileno(stdin)) || !interrupt_enabled)
         return;
     tcgetattr(fileno(stdin), &ttystate);
     original_ttystate = ttystate;
@@ -342,7 +344,7 @@ void init_term()
 
 void restore_term()
 {
-    if (!isatty(fileno(stdin)))
+    if (!isatty(fileno(stdin)) || !interrupt_enabled)
         return;
     tcsetattr(fileno(stdin), TCSANOW, &original_ttystate);
 }
@@ -386,6 +388,8 @@ void print_help(char *prog)
     fprintf(stderr, "  -boot-test        bootloader test mode\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
     fprintf(stderr, "  -stat             show simulator status\n");
+    fprintf(stderr, "  -no-mmu           disable MMU feature\n");
+    fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
     exit(1);
 }
 
@@ -400,6 +404,10 @@ void parse_cmd(int argc, char *argv[])
             mem_size = atoi(argv[++i]) << 20;
         } else if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
+        } else if (strcmp(argv[i], "-no-mmu") == 0) {
+            mmu_enabled = 0;
+        } else if (strcmp(argv[i], "-no-interrupt") == 0) {
+            interrupt_enabled = 0;
         } else if (infile[0] != '\0') {
             fprintf(stderr, "error: multiple input files are specified\n");
             print_help(argv[0]);
