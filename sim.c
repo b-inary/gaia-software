@@ -33,7 +33,7 @@ int show_stat, boot_test;
 uint32_t to_physical(uint32_t);
 void restore_term();
 
-void print_env()
+void print_env(int show_vpc)
 {
     fprintf(stderr, "\x1b[1m*** Simulator Status ***\x1b[0m\n");
     if (show_stat) {
@@ -42,7 +42,10 @@ void print_env()
             fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
                     i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
     }
-    fprintf(stderr, "<Current Virtual PC>: 0x%08x, <Current Physical PC>: 0x%06x\n", pc, to_physical(pc));
+    if (show_vpc)
+        fprintf(stderr, "<Current Virtual PC>: 0x%08x, <Current Physical PC>: 0x%06x\n", pc, to_physical(pc));
+    else
+        fprintf(stderr, "<Current PC>: 0x%08x\n", pc);
     fprintf(stderr, "<Number of executed instructions>: %lld\n", inst_cnt);
 }
 
@@ -53,7 +56,7 @@ void error(char *fmt, ...)
     fprintf(stderr, "\x1b[1;31mruntime error: \x1b[39m");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\x1b[0m\n\n");
-    print_env();
+    print_env(!strcmp("to_physical: ", fmt));
     restore_term();
     va_end(ap);
     exit(1);
@@ -131,6 +134,8 @@ uint32_t fpu_sign(uint32_t x, int mode)
     }
 }
 
+// Warning: Error messages in "to_physical" MUST starts with "to_physical: " to prevent
+//          infinite loop in "error" function, which may call "to_physical" again.
 uint32_t to_physical(uint32_t addr)
 {
     uint32_t tmp;
@@ -410,7 +415,7 @@ int main(int argc, char *argv[])
     if (infile[0] == '\0') print_help(argv[0]);
     init_term();
     runsim();
-    if (show_stat) print_env();
+    if (show_stat) print_env(1);
     restore_term();
     return 0;
 }
