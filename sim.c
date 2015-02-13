@@ -56,7 +56,7 @@ void error(char *fmt, ...)
     fprintf(stderr, "\x1b[1;31mruntime error: \x1b[39m");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\x1b[0m\n\n");
-    print_env(!strcmp("to_physical: ", fmt));
+    print_env(strncmp("to_physical: ", fmt, strlen("to_physical: ")));
     restore_term();
     va_end(ap);
     exit(1);
