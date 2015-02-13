@@ -65,7 +65,7 @@ main:
     mov     [r1 - 8], r2
     mov     [label], r1
     mov     [label], 1
-    mov     [label], label
+    mov     [label2], label3
     add     r1, r2, r3
     add     r1, r2, 3
     add     r1, r2, 345
@@ -83,8 +83,8 @@ main:
     read    r1
     write   r1
     br      label
-    bz+     r1, label
-    bnz-    r1, label
+    bz+     r1, label2
+    bnz-    r1, label3
     bne     r1, r2, label
     beq     r1, 2, label
     blt+    r1, r2, label
@@ -105,8 +105,10 @@ main:
 
     # directives
 .align  256
+label2:
     .int    42
     .int    0xdeadbeef, 3
     .float  1.2e34
     .float  -3.141592, 3
+    .set    label3, 0x1234
 

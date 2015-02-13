@@ -613,6 +613,12 @@ def init_label(lines, jump_main):
                 error('expected integer literal: ' + operands[1])
             addr += 4 * imm
             ret.append((mnemonic, operands, filename, pos))
+        elif mnemonic == '.set':
+            check_operands_n(operands, 2)
+            success, imm = parse_imm(operands[1])
+            if not success:
+                error('expected integer literal: ' + operands[1])
+            add_label(operands[0], imm)
         elif mnemonic == '__movl' and long_label:
             addr += 8
             ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
