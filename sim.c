@@ -42,10 +42,13 @@ void print_env(int show_vpc)
             fprintf(stderr, "  r%-2d: %11d (0x%08x) / r%-2d: %11d (0x%08x)\n",
                     i, reg[i], reg[i], i + 16, reg[i + 16], reg[i + 16]);
     }
-    if (show_vpc)
-        fprintf(stderr, "<Current Virtual PC>: 0x%08x, <Current Physical PC>: 0x%06x\n", pc, to_physical(pc));
-    else
-        fprintf(stderr, "<Current PC>: 0x%08x\n", pc);
+    if (mmu_enabled) {
+        fprintf(stderr, "<Current Virtual PC>: 0x%08x\n", pc);
+        if (show_vpc)
+            fprintf(stderr, "<Current Physical PC>: 0x%06x\n", to_physical(pc));
+    } else {
+        fprintf(stderr, "<Current PC>: 0x%06x\n", pc);
+    }
     fprintf(stderr, "<Number of executed instructions>: %lld\n", inst_cnt);
 }
 
@@ -139,7 +142,7 @@ uint32_t fpu_sign(uint32_t x, int mode)
 uint32_t to_physical(uint32_t addr)
 {
     uint32_t tmp;
-    if (mem[0x2200 >> 2] == 0 || !mmu_enabled) return addr;
+    if (!mmu_enabled || mem[0x2200 >> 2] == 0) return addr;
     tmp = mem[0x2204 >> 2] | ((addr >> 22) << 2);
     if (tmp & 3 || tmp >= mem_size)
         error("to_physical: PDE address error: 0x%08x", tmp);
@@ -202,8 +205,10 @@ void store(int ra, uint32_t disp, uint32_t x)
         error("store: address must be a multiple of 4: 0x%08x", addr);
     if (addr >= mem_size)
         error("store: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x2000) serial_write(x);
-    else mem[addr >> 2] = x;
+    if (addr == 0x2000)
+        serial_write(x);
+    else
+        mem[addr >> 2] = x;
 }
 
 void exec_alu(uint32_t inst)
@@ -339,6 +344,7 @@ void init_term()
     tcgetattr(fileno(stdin), &ttystate);
     original_ttystate = ttystate;
     cfmakeraw(&ttystate);
+    ttystate.c_oflag |= OPOST;
     tcsetattr(fileno(stdin), TCSANOW, &ttystate);
 }
 
@@ -371,10 +377,11 @@ void runsim()
     init_env();
     load_file();
     while (1) {
-        if (to_physical(pc) >= entry_point + prog_size)
+        uint32_t phys_pc = to_physical(pc);
+        if (phys_pc >= entry_point + prog_size && !boot_test)
             error("program counter out of range");
-        if (mem[to_physical(pc) >> 2] == HALT_CODE) break;
-        exec(mem[to_physical(pc) >> 2]);
+        if (mem[phys_pc >> 2] == HALT_CODE) break;
+        exec(mem[phys_pc >> 2]);
         interrupt();
         pc += 4;
         ++inst_cnt;
