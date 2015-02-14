@@ -565,21 +565,17 @@ long_label = False
 def add_label(label, i):
     global long_label
     long_label |= i >= 0x8000
-    dic = labels.get(label, {})
-    if filename in dic and dic[filename][0] >= 0:
+    labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
+    if labels[label][filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
-    val = dic.get(filename, [-1, False, False])
-    dic[filename] = [i, val[1], False]
-    labels[label] = dic
-    rev_labels[i] = rev_labels.get(i, []) + [label]
+    labels[label][filename][0] = i
+    rev_labels.setdefault(i, []).append(label)
 
 def add_global(label):
-    dic = labels.get(label, {})
-    val = dic.get(filename, [-1, False, False])
-    dic[filename] = [val[0], True, False]
-    labels[label] = dic
+    labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
+    labels[label][filename][1] = True
 
-def init_label(lines, jump_main):
+def init_label(lines, jump_main, long_label):
     global labels, rev_labels, filename, pos
     labels = {}
     rev_labels = {}
@@ -639,7 +635,7 @@ def label_addr(label, cur, rel):
         else:
             for key in labels[label]:
                 if labels[label][key][1]:
-                    decl += [key]
+                    decl.append(key)
     if len(decl) == 0:
         if label == 'main':
             fatal('global label \'main\' is required')
@@ -684,7 +680,7 @@ argparser.add_argument('-f', help='append label to end of program', metavar='<la
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>', action='append')
 argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
-argparser.add_argument('-o', help='set output file to <file>', metavar='<file>')
+argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
@@ -696,8 +692,6 @@ if args.inputs == []:
 if args.l:
     library = map(os.path.relpath, args.l)
     args.inputs = library + args.inputs
-if not args.o:
-    args.o = 'a.out'
 if args.e:
     success, entry_point = parse_imm(args.e)
     if not success:
@@ -740,9 +734,11 @@ if args.Wr29:
             warning('r29 is used', True)
 
 # 2. label resolution (by 2-pass algorithm)
-lines2 = init_label(lines1, not args.r)
+lines2 = init_label(lines1, not args.r, False)
+if args.n:
+    long_label = False
 if long_label:
-    lines2 = init_label(lines1, not args.r)
+    lines2 = init_label(lines1, not args.r, True)
 lines3 = []
 addr = entry_point
 next_line = None
