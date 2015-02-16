@@ -756,6 +756,8 @@ for mnemonic, operands, filename, pos in lines2:
             idx = 0 if mnemonic == '.int' else -1
             operands[idx] = label_addr(operands[idx], addr, False)
             if mnemonic == '__movl':
+                if not 0 <= int(operands[1]) <= 0xffffffff:
+                    fatal('address of start label is too large: ' + operands[1])
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
