@@ -570,7 +570,12 @@ start_label = 'main'
 
 def add_label(label, i):
     global long_label
-    long_label |= i >= 0x8000
+    if not -0x80000000 <= i <= 0xffffffff:
+        if label == start_label:
+            fatal('address of start label is too large')
+        else:
+            error('label address too large')
+    long_label |= not check_imm_range(i, 16)
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     if labels[label][filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
@@ -772,8 +777,6 @@ for mnemonic, operands, filename, pos in lines2:
             idx = 0 if mnemonic == '.int' else -1
             operands[idx] = str(label_addr(operands[idx], addr, False))
             if mnemonic == '__movl':
-                if not 0 <= int(operands[1]) <= 0xffffffff:
-                    fatal('address of start label is too large: ' + operands[1])
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
