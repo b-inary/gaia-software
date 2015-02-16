@@ -622,7 +622,7 @@ def init_label(lines, jump_main, long_label):
         else:
             addr += 4
             ret.append((mnemonic, operands, filename, pos))
-    if addr > 0x400000:
+    if addr - entry_point > 0x400000:
         fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
     return ret
 
