@@ -12,7 +12,12 @@ filename = ''
 pos = 0
 
 def fatal(msg):
-    print >> sys.stderr, '{}: error:'.format(os.path.basename(sys.argv[0])), msg
+    prog = os.path.basename(sys.argv[0])
+    if sys.stderr.isatty():
+        print >> sys.stderr, '\x1b[1m{}: \x1b[31mfatal error:\x1b[39m'.format(prog), msg
+        sys.stderr.write('\x1b[0m')
+    else:
+        print >> sys.stderr, '{}: fatal error:'.format(prog), msg
     sys.exit(1)
 
 def error(msg):
