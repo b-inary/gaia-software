@@ -454,8 +454,11 @@ def expand_bfne(op, operands, pred):
 
 def expand_push(operands):
     check_operands_n(operands, 1)
-    return [('sub', ['rsp', 'rsp', 'r0', '4']),
-            ('st', [operands[0], 'rsp', '0'])]
+    pre = [('sub', ['rsp', 'rsp', 'r0', '4'])]
+    success, imm = parse_imm(operands[0])
+    if success:
+        return mov_imm('r29', imm) + pre + [('st', ['r29', 'rsp', '0'])]
+    return pre + [('st', [operands[0], 'rsp', '0'])]
 
 def expand_pop(operands):
     check_operands_n(operands, 1)

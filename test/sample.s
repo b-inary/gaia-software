@@ -94,6 +94,7 @@ main:
     bflt+   r1, r2, label
     bfgt-   r1, r2, label
     push    r1
+    push    23
     pop     r1
     call    label
     call    r1
