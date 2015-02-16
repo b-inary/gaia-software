@@ -561,6 +561,7 @@ rev_labels = {}
 library = []
 entry_point = 0x3000
 long_label = False
+start_label = 'main'
 
 def add_label(label, i):
     global long_label
@@ -581,7 +582,7 @@ def init_label(lines, jump_main, long_label):
     rev_labels = {}
     ret = []
     if jump_main:
-        ret = [('__movl', ['main', 'main'], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
+        ret = [('__movl', ['main', start_label], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
     addr = entry_point + 4 * len(ret)
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
@@ -637,15 +638,15 @@ def label_addr(label, cur, rel):
                 if labels[label][key][1]:
                     decl.append(key)
     if len(decl) == 0:
-        if label == 'main':
-            fatal('global label \'main\' is required')
+        if label == start_label:
+            fatal('global label \'{}\' is required'.format(label))
         else:
             error('label \'{}\' is not declared'.format(label))
     if len(decl) > 1 and not set(decl) <= set(library):
         decl = list(set(decl) - set(library))
     if len(decl) > 1:
         msg = 'label \'{}\' is declared in multiple files ({})'.format(label, ', '.join(sorted(decl)))
-        if label == 'main':
+        if label == start_label:
             fatal(msg)
         else:
             error(msg)
@@ -683,6 +684,7 @@ argparser.add_argument('-n', help='assure long label assignment does not appear'
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
+argparser.add_argument('-start', help='start execution from <label>', metavar='<label>')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
 argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
 args = argparser.parse_args()
@@ -700,6 +702,8 @@ if args.e:
     if entry_point & 3 != 0:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: entry address must be a multiple of 4')
+if args.start:
+    start_label = args.start
 
 # 0. preprocess
 lines0 = []
