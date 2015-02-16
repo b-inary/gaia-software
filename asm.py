@@ -214,7 +214,7 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
             error('displacement (' + disp + ') is too large')
         d >>= 2
     elif not -0x8000 <= d <= 0xffff:
-        error('immediate value too large: ' + imm)
+        error('immediate value too large: ' + disp)
     c1 = (op << 4) + (x >> 1)
     c2 = ((x & 1) << 7) + (a << 2) + pred
     c3 = (d >> 8) & 255
