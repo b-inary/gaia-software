@@ -120,8 +120,8 @@ uint32_t fpu(int tag, int ra, int rb)
         case 3:  return bitint(bitfloat(reg[ra]) / bitfloat(reg[rb]));
         case 4:  return bitint(1.0 / bitfloat(reg[ra]));
         case 5:  return bitint(sqrtf(bitfloat(reg[ra])));
-        case 6:  return (uint32_t)roundf(bitfloat(reg[ra]));
-        case 7:  return bitint((float)reg[ra]);
+        case 6:  return (int32_t)roundf(bitfloat(reg[ra]));
+        case 7:  return bitint((float)(int32_t)reg[ra]);
         case 8:  return bitint(floorf(bitfloat(reg[ra])));
         default: error("instruction decode error (FPU)"); return 0;
     }
