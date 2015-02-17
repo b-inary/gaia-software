@@ -112,5 +112,5 @@ label2:
     .float  1.2e34
     .float  -3.141592, 3
     .set    label3, 0x1234
-    .set    label4, 100 + 200 * label(label3)
+    .set    label4, label + label2 * 4
 

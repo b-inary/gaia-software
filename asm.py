@@ -589,20 +589,19 @@ def add_global(label):
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     labels[label][filename][1] = True
 
-def no_label_error(label):
-    if label == start_label:
-        fatal('global label \'{}\' is required'.format(label))
-    else:
-        error('label \'{}\' is not declared'.format(label))
-
-def resolve_addr(dic, label=''):
-    decl = []
+def label_addr(label, cur=-1):
+    if parse_imm(label)[0]:
+        return label
+    dic = labels.get(label, {})
     if filename in dic:
         decl = [filename]
     else:
         decl = filter(lambda x: dic[x][1], dic)
     if len(decl) == 0:
-        no_label_error(label)
+        if label == start_label:
+            fatal('global label \'{}\' is required'.format(label))
+        else:
+            error('label \'{}\' is not declared'.format(label))
     if len(decl) > 1 and not set(decl) <= set(library):
         decl = list(set(decl) - set(library))
     if len(decl) > 1:
@@ -612,16 +611,23 @@ def resolve_addr(dic, label=''):
         else:
             error(msg)
     dic[decl[0]][2] = True
-    return dic[decl[0]][0]
+    offset = cur + 4 if cur >= 0 else 0
+    return str(dic[decl[0]][0] - offset)
 
-def eval_set_expr(expr):
+def eval_expr(expr):
+    r = re.compile('[\w.$]+')
+    m = r.search(expr)
+    while m:
+        addr = label_addr(m.group())
+        expr = expr[:m.start()] + addr + expr[m.end():]
+        m = r.search(expr, m.start() + len(addr))
     try:
-        res = eval(expr, labels, {'label': resolve_addr})
+        res = eval(expr, {})
         if not isinstance(res, int):
             error('expression type must be int')
         return res
     except StandardError:
-        error('invalid expression (maybe label not found)')
+        error('eval error: ' + expr)
 
 def init_label(lines, jump_main, long_label):
     global labels, rev_labels, filename, pos
@@ -659,7 +665,7 @@ def init_label(lines, jump_main, long_label):
             ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
-            add_label(operands[0], eval_set_expr(operands[1]))
+            add_label(operands[0], eval_expr(operands[1]))
         elif mnemonic == '__movl' and long_label:
             addr += 8
             ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
@@ -669,14 +675,6 @@ def init_label(lines, jump_main, long_label):
     if addr - entry_point > 0x400000:
         fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
     return ret
-
-def label_addr(label, cur, rel):
-    if parse_imm(label)[0]:
-        return label
-    if not label in labels:
-        no_label_error(label)
-    offset = cur + 4 if rel else 0
-    return resolve_addr(labels[label], label) - offset
 
 def check_global(label):
     if labels[label][filename][0] < 0:
@@ -778,7 +776,7 @@ for mnemonic, operands, filename, pos in lines2:
         if mnemonic in ['ld', 'st', '.int', '__movl']:
             check_operands_n(operands, 1, 3)
             idx = 0 if mnemonic == '.int' else -1
-            operands[idx] = str(label_addr(operands[idx], addr, False))
+            operands[idx] = label_addr(operands[idx])
             if mnemonic == '__movl':
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
@@ -790,7 +788,7 @@ for mnemonic, operands, filename, pos in lines2:
                 operands[1] = '{:#06x}'.format(int(operands[1]) & 0xffff)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
-            operands[-1] = str(label_addr(operands[-1], addr, True))
+            operands[-1] = label_addr(operands[-1], addr)
         if mnemonic == '.int':
             addr += 4 * (int(operands[1], 0) - 1)
         lines3.append((mnemonic, operands, filename, pos))
