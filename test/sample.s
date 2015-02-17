@@ -59,13 +59,13 @@ main:
     mov     r1, 234567
     mov     r1, 1.0
     mov     r1, 2.3
-    mov     r1, label
+    mov     r1, label + label2 * 3
     mov     r1, [r2 + 4]
-    mov     r1, [label]
+    mov     r1, [label + 8]
     mov     [r1 - 8], r2
     mov     [label], r1
     mov     [label], 1
-    mov     [label2], label3
+    mov     [label2 + 4], label3 >> 2
     add     r1, r2, r3
     add     r1, r2, 3
     add     r1, r2, 345
@@ -109,6 +109,7 @@ main:
 label2:
     .int    42
     .int    0xdeadbeef, 3
+    .int    label & ~label2
     .float  1.2e34
     .float  -3.141592, 3
     .set    label3, 0x1234

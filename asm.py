@@ -216,7 +216,7 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
         if d & 3 != 0:
             error('displacement must be a multiple of 4')
         if not check_imm_range(d, 18):
-            error('displacement (' + disp + ') is too large')
+            error('displacement is too large: ' + disp)
         d >>= 2
     elif not -0x8000 <= d <= 0xffff:
         error('immediate value too large: ' + disp)
@@ -511,7 +511,7 @@ def expand_dot_float(operands):
     success, imm = parse_float(operands[0])
     if not success:
         error('expected floating point literal: ' + operands[0])
-    operands[0] = '{:#010x}'.format(float_to_bit(imm))
+    operands[0] = str(float_to_bit(imm))
     return expand_dot_int(operands)
 
 macro_table = {
@@ -776,7 +776,7 @@ for mnemonic, operands, filename, pos in lines2:
         if mnemonic in ['ld', 'st', '.int', '__movl']:
             check_operands_n(operands, 1, 3)
             idx = 0 if mnemonic == '.int' else -1
-            operands[idx] = label_addr(operands[idx])
+            operands[idx] = str(eval_expr(operands[idx]))
             if mnemonic == '__movl':
                 if long_label or operands[0] == 'main':
                     if operands[0] == 'main':
