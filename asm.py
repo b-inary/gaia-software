@@ -404,7 +404,7 @@ def expand_read(operands):
     check_operands_n(operands, 1)
     return [('ld', [operands[0], 'r0', '0x2000']),
             ('cmplt', ['r29', operands[0], 'r0', '0']),
-            ('bne', ['r29', 'r0', '-8'])]
+            ('bne', ['r29', 'r0', '-12'])]
 
 def expand_write(operands):
     check_operands_n(operands, 1)
