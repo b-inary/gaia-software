@@ -811,39 +811,46 @@ if args.s:
             if mnemonic == '.int':
                 addr += 4 * (int(operands[1], 0) - 1)
             addr += 4
+
+def write(f, byterepr):
+    if args.k:
+        f.write("{} => x\"{}\",\n".format(i, ''.join('{:02x}'.format(ord(x)) for x in byterepr)))
+    elif args.a:
+        fmt = """
+        wait for BR; RS_RX <= '0';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '{}';
+        wait for BR; RS_RX <= '1';
+
+        wait for (2 * BR);
+
+"""
+        for b in byterepr:
+            a = ord(b)
+            print a
+            ps = ['1' if a & (1 << j) else '0' for j in range(8)]
+            f.write(fmt.format(*ps))
+    else:
+        f.write(byterepr)
+
 with open(args.o, 'w') as f:
-    if not (args.a or args.c or args.k):
-        f.write('size')
+    size = 0
+    if not (args.c or args.k):
+        write(f, 'size')
     for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
         byterepr = code(mnemonic, operands)
-        if args.k:
-            f.write("{} => x\"{}\",\n".format(i, ''.join('{:02x}'.format(ord(x)) for x in byterepr)))
-        elif args.a:
-            fmt = """
-            wait for BR; RS_RX <= '0';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '{}';
-            wait for BR; RS_RX <= '1';
-
-            wait for (2 * BR);
-
-            """
-            for b in byterepr:
-                a = ord(b)
-                ps = ['1' if a & (1 << j) else '0' for j in range(8)]
-                f.write(fmt.format(*ps))
-        else:
-            f.write(byterepr)
+        write(f, byterepr)
+        size += len(byterepr)
     if args.k:
         f.write("others => (others => '0')\n")
-    elif not (args.a or args.c):
-        size = f.tell() - 4
+    elif not args.c:
         f.seek(0)
-        f.write(''.join(chr(size >> x & 255) for x in [24, 16, 8, 0]))
+        byterepr = ''.join(chr(size >> x & 255) for x in [24, 16, 8, 0])
+        write(f, byterepr)
 
