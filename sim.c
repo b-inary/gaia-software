@@ -136,16 +136,16 @@ uint32_t to_physical(uint32_t addr)
     if (!mmu_enabled || mem[0x2200 >> 2] == 0) return addr;
     tmp = mem[0x2204 >> 2] | ((addr >> 22) << 2);
     if (tmp & 3 || tmp >= mem_size)
-        error("to_physical: PDE address error: 0x%08x", tmp);
+        error("to_physical: PDE address error: 0x%08x, Requested virtual address: 0x%08x", tmp, addr);
     tmp = mem[tmp >> 2];
     if ((tmp & 1) == 0)
-        error("to_physical: invalid PDE");
+        error("to_physical: invalid PDE, Requested virtual address: 0x%08x", addr);
     tmp = (tmp & ~0x0fff) | (((addr >> 12) & 0x03ff) << 2);;
     if (tmp >= mem_size)
-        error("to_physical: PTE address error: 0x%08x", tmp);
+        error("to_physical: PTE address error: 0x%08x, Requested virtual address: 0x%08x", tmp, addr);
     tmp = mem[tmp >> 2];
     if ((tmp & 1) == 0)
-        error("to_physical: invalid PTE");
+        error("to_physical: invalid PTE, Requested virtual address: 0x%08x", addr);
     return (tmp & ~0x0fff) | (addr & 0x0fff);
 }
 
