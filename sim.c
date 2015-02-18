@@ -79,15 +79,6 @@ float bitfloat(uint32_t x)
     return u.f;
 }
 
-// Find the last bit set in a word, the opposite of ffs.
-int fls(uint32_t i)
-{
-    if (i == 0) return 0;
-    int res = 0;
-    while ((i & (1 << res)) == 0) res++;
-    return res + 1;
-}
-
 uint32_t alu(int tag, int ra, int rb, uint32_t lit)
 {
     switch (tag) {
@@ -317,7 +308,7 @@ void interrupt()
         return;
     update_irqbits();
     if (irq_bits && mem[0x2104 >> 2]) {
-        mem[0x210c >> 2] = fls(irq_bits) - 1; // IRQ number
+        mem[0x210c >> 2] = __builtin_ctz(irq_bits); // IRQ number
         mem[0x2108 >> 2] = pc;
         mem[0x2104 >> 2] = 0;
         pc = mem[0x2100 >> 2] - 4;
