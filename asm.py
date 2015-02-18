@@ -688,6 +688,7 @@ def show_label(i):
 argparser = argparse.ArgumentParser(usage='%(prog)s [options] file...')
 argparser.add_argument('inputs', nargs='*', help='input files', metavar='file...')
 argparser.add_argument('-a', help='output as rs232c send test format', action='store_true')
+argparser.add_argument('-c', help='do not append file header', action='store_true')
 argparser.add_argument('-e', help='set entry point address', metavar='<integer>')
 argparser.add_argument('-f', help='append label to end of program', metavar='<label>')
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
@@ -807,6 +808,8 @@ if args.s:
                 addr += 4 * (int(operands[1], 0) - 1)
             addr += 4
 with open(args.o, 'w') as f:
+    if not (args.a or args.c or args.k):
+        f.write('size')
     for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
         byterepr = code(mnemonic, operands)
         if args.k:
@@ -835,4 +838,8 @@ with open(args.o, 'w') as f:
             f.write(byterepr)
     if args.k:
         f.write("others => (others => '0')\n")
+    elif not (args.a or args.c):
+        size = f.tell() - 4
+        f.seek(0)
+        f.write(''.join(chr(size >> x & 255) for x in [24, 16, 8, 0]))
 

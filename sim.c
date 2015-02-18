@@ -331,7 +331,6 @@ void init_env()
     if (!boot_test)
         reg[30] = reg[31] = mem_size;
     pc = entry_point;
-    prog_size = 0;
     inst_cnt = 0;
     irq_bits = 0;
 }
@@ -357,18 +356,23 @@ void restore_term()
 
 void load_file()
 {
-    int inst;
     FILE *fp = fopen(infile, "r");
     if (fp == NULL)
         error(strerror(errno));
-    while (1) {
-        inst = fgetc(fp);
-        if (inst == EOF) return;
-        for (int j = 1; j < 4; ++j)
-            inst <<= 8, inst += fgetc(fp);
-        mem[(entry_point + prog_size) >> 2] = inst;
-        prog_size += 4;
+
+    prog_size = 0;
+    for (int i = 0; i < 4; ++i)
+        prog_size = (prog_size << 8) + fgetc(fp);
+
+    for (uint32_t i = 0; i < prog_size; ++i) {
+        int c = fgetc(fp);
+        if (c == EOF)
+            error("load_file: invalid header");
+        *((uint8_t*)mem + entry_point + (i ^ 3)) = c;
     }
+
+    if (fgetc(fp) != EOF)
+        error("load_file: invalid header");
     fclose(fp);
 }
 
