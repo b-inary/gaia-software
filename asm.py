@@ -833,7 +833,6 @@ def write(f, byterepr):
 """
         for b in byterepr:
             a = ord(b)
-            print a
             ps = ['1' if a & (1 << j) else '0' for j in range(8)]
             f.write(fmt.format(*ps))
     else:
