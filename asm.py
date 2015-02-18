@@ -569,6 +569,13 @@ entry_point = 0x3000
 start_label = 'main'
 
 def add_label(label, i):
+    if label in regs:
+        error('\'{}\' is register name'.format(label))
+    if parse_int(label)[0]:
+        error('\'{}\' can be parsed as integer'.format(label))
+    if re.search(r'[^\w.$!?]', label):
+        c = re.search(r'[^\w.$!?]', label).group()
+        error('label name cannot contain \'{}\' character'.format(c))
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     if labels[label][filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
@@ -605,7 +612,7 @@ def label_addr(label, cur=-1):
     return str(dic[decl[0]][0] - offset)
 
 def eval_expr(expr):
-    r = re.compile('[\w.$]+')
+    r = re.compile(r'[\w.$!?]+')
     m = r.search(expr)
     while m:
         addr = label_addr(m.group())
