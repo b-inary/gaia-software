@@ -47,9 +47,6 @@ regs = {'rsp': 30, 'rbp': 31}
 for i in range(32):
     regs['r' + str(i)] = i
 
-def is_reg(operand):
-    return operand in regs
-
 def regnum(reg):
     if reg not in regs:
         error('expected register: ' + reg)
@@ -83,10 +80,10 @@ def parse_memaccess(operand):
     if m:
         base = m.group(1)
         disp = ('' if m.group(2) == '+' else '-') + m.group(3)
-        if is_reg(base) and parse_int(disp)[0]:
+        if base in regs and parse_int(disp)[0]:
             return True, base, disp
     m = re.match(r'\[\s*(r\w+)\s*\]$', operand)
-    if m and is_reg(m.group(1)):
+    if m and m.group(1) in regs:
         return True, m.group(1), '0'
     m = re.match(r'\[\s*([+-]?\s*\w+)\s*\]$', operand)
     if m and parse_int(m.group(1))[0]:
@@ -316,7 +313,7 @@ def mov_imm(dest, imm):
 
 def expand_mov(operands):
     check_operands_n(operands, 2)
-    if is_reg(operands[0]) and is_reg(operands[1]):
+    if operands[0] in regs and operands[1] in regs:
         return [('add', [operands[0], operands[1], 'r0', '0'])]
     if operands[1][0] == '[' and operands[1][-1] == ']':
         success, base, disp = parse_memaccess(operands[1])
@@ -325,7 +322,7 @@ def expand_mov(operands):
         return [('ld', [operands[0], 'r0', operands[1][1:-1].strip()])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
         pre = []
-        if not is_reg(operands[1]):
+        if not operands[1] in regs:
             pre = expand_mov(['r29', operands[1]])
             operands[1] = 'r29'
         success, base, disp = parse_memaccess(operands[0])
@@ -338,7 +335,7 @@ def expand_mov(operands):
     success, imm = parse_float(operands[1])
     if success:
         return mov_imm(operands[0], float_to_bit(imm))
-    if is_reg(operands[0]):
+    if operands[0] in regs:
         return [('mov', operands)]
     error('invalid syntax')
 
@@ -347,7 +344,7 @@ def expand_alu(op, operands):
     check_operands_n(operands, 3, 4)
     if (len(operands) == 4):
         return [(op, operands)]
-    if is_reg(operands[2]):
+    if operands[2] in regs:
         return [(op, operands + ['0'])]
     success, imm = parse_int(operands[2])
     if success:
@@ -360,7 +357,7 @@ def expand_and(operands):
     check_operands_n(operands, 3, 4)
     if (len(operands) == 4):
         return [('and', operands)]
-    if is_reg(operands[2]):
+    if operands[2] in regs:
         return [('and', operands + ['-1'])]
     success, imm = parse_int(operands[2])
     if success:
@@ -379,7 +376,7 @@ def expand_not(operands):
 
 def expand_cmpgt(operands):
     check_operands_n(operands, 3)
-    if is_reg(operands[2]):
+    if operands[2] in regs:
         return [('cmplt', [operands[0], operands[2], operands[1], '0'])]
     success, imm = parse_int(operands[2])
     if success:
@@ -388,7 +385,7 @@ def expand_cmpgt(operands):
 
 def expand_cmpge(operands):
     check_operands_n(operands, 3)
-    if is_reg(operands[2]):
+    if operands[2] in regs:
         return [('cmple', [operands[0], operands[2], operands[1], '0'])]
     success, imm = parse_int(operands[2])
     if success:
@@ -470,7 +467,7 @@ def expand_call(operands):
             ('add', ['rbp', 'rsp', 'r0', '0'])]
     post = [('add', ['rsp', 'rbp', 'r0', '4']),
             ('ld', ['rbp', 'rsp', '-4'])]
-    if is_reg(operands[0]):
+    if operands[0] in regs:
         jump = [('jl', ['r28', '0']),
                 ('add', ['r28', 'r28', 'r0', '8']),
                 ('jr', operands)]
