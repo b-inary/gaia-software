@@ -55,23 +55,21 @@ def regnum(reg):
         error('expected register: ' + reg)
     return regs[reg]
 
-def parse_imm(operand):
+def parse_int(s):
     try:
-        imm = int(operand, 0)
-        return True, imm
+        return True, int(s, 0)
     except ValueError:
         return False, 0
 
-def parse_float(operand):
+def parse_float(s):
     try:
-        f = float(operand)
-        return True, f
+        return True, float(s)
     except ValueError:
         return False, 0.0
 
-def check_imm_range(imm, b):
+def check_int_range(i, b):
     x = 1 << (b - 1)
-    return -x <= imm < x
+    return -x <= i < x
 
 def float_to_bit(f):
     try:
@@ -85,13 +83,13 @@ def parse_memaccess(operand):
     if m:
         base = m.group(1)
         disp = ('' if m.group(2) == '+' else '-') + m.group(3)
-        if is_reg(base) and parse_imm(disp)[0]:
+        if is_reg(base) and parse_int(disp)[0]:
             return True, base, disp
     m = re.match(r'\[\s*(r\w+)\s*\]$', operand)
     if m and is_reg(m.group(1)):
         return True, m.group(1), '0'
     m = re.match(r'\[\s*([+-]?\s*\w+)\s*\]$', operand)
-    if m and parse_imm(m.group(1))[0]:
+    if m and parse_int(m.group(1))[0]:
         return True, 'r0', m.group(1)
     return False, 'r0', '0'
 
@@ -185,10 +183,10 @@ def code_i(rx, ra, rb, imm, tag):
     x = regnum(rx)
     a = regnum(ra)
     b = regnum(rb)
-    success, i = parse_imm(imm)
+    success, i = parse_int(imm)
     if not success:
         error('expected integer literal: ' + imm)
-    if not check_imm_range(i, 8):
+    if not check_int_range(i, 8):
         error('immediate value too large: ' + imm)
     c1 = x >> 1
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
@@ -209,13 +207,13 @@ def code_f(rx, ra, rb, sign, tag):
 def code_m(op, rx, ra, pred, disp, disp_mode):
     x = regnum(rx)
     a = regnum(ra)
-    success, d = parse_imm(disp)
+    success, d = parse_int(disp)
     if not success:
         error('expected displacement: ' + disp)
     if disp_mode:
         if d & 3 != 0:
             error('displacement must be a multiple of 4')
-        if not check_imm_range(d, 18):
+        if not check_int_range(d, 18):
             error('displacement is too large: ' + disp)
         d >>= 2
     elif not -0x8000 <= d <= 0xffff:
@@ -259,7 +257,7 @@ def on_misc3(operands, op, pred, disp_mode):
     return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
 
 def on_dot_int(operand):
-    success, imm = parse_imm(operand[0])
+    success, imm = parse_int(operand[0])
     if not success:
         error('expected integer literal: ' + operands[0])
     if not -0x80000000 <= imm <= 0xffffffff:
@@ -307,7 +305,7 @@ def expand_nop(operands):
     return [('add', ['r0', 'r0', 'r0', '0'])]
 
 def mov_imm(dest, imm):
-    if check_imm_range(imm, 16):
+    if check_int_range(imm, 16):
         return [('ldl', [dest, str(imm)])]
     if not -0x80000000 <= imm <= 0xffffffff:
         error('immediate value too large')
@@ -334,7 +332,7 @@ def expand_mov(operands):
         if success:
             return pre + [('st', [operands[1], base, disp])]
         return pre + [('st', [operands[1], 'r0', operands[0][1:-1].strip()])]
-    success, imm = parse_imm(operands[1])
+    success, imm = parse_int(operands[1])
     if success:
         return mov_imm(operands[0], imm)
     success, imm = parse_float(operands[1])
@@ -351,9 +349,9 @@ def expand_alu(op, operands):
         return [(op, operands)]
     if is_reg(operands[2]):
         return [(op, operands + ['0'])]
-    success, imm = parse_imm(operands[2])
+    success, imm = parse_int(operands[2])
     if success:
-        if check_imm_range(imm, 8):
+        if check_int_range(imm, 8):
             return [(op, [operands[0], operands[1], 'r0', operands[2]])]
         return mov_imm('r29', imm) + [(op, [operands[0], operands[1], 'r29', '0'])]
     error('invalid syntax')
@@ -364,9 +362,9 @@ def expand_and(operands):
         return [('and', operands)]
     if is_reg(operands[2]):
         return [('and', operands + ['-1'])]
-    success, imm = parse_imm(operands[2])
+    success, imm = parse_int(operands[2])
     if success:
-        if check_imm_range(imm, 8):
+        if check_int_range(imm, 8):
             return [('and', [operands[0], operands[1], operands[1], operands[2]])]
         return mov_imm('r29', imm) + [('and', [operands[0], operands[1], 'r29', '-1'])]
     error('invalid syntax')
@@ -383,7 +381,7 @@ def expand_cmpgt(operands):
     check_operands_n(operands, 3)
     if is_reg(operands[2]):
         return [('cmplt', [operands[0], operands[2], operands[1], '0'])]
-    success, imm = parse_imm(operands[2])
+    success, imm = parse_int(operands[2])
     if success:
         return mov_imm('r29', imm) + [('cmplt', [operands[0], 'r29', operands[1], '0'])]
     error('invalid syntax')
@@ -392,7 +390,7 @@ def expand_cmpge(operands):
     check_operands_n(operands, 3)
     if is_reg(operands[2]):
         return [('cmple', [operands[0], operands[2], operands[1], '0'])]
-    success, imm = parse_imm(operands[2])
+    success, imm = parse_int(operands[2])
     if success:
         return mov_imm('r29', imm) + [('cmple', [operands[0], 'r29', operands[1], '0'])]
     error('invalid syntax')
@@ -430,7 +428,7 @@ def expand_bnz(operands, pred):
 # bne, beq
 def expand_bne(op, operands, pred):
     check_operands_n(operands, 3)
-    success, imm = parse_imm(operands[1])
+    success, imm = parse_int(operands[1])
     if success:
         return mov_imm('r29', imm) + [(op + pred, [operands[0], 'r29', operands[2]])]
     return [(op + pred, operands)]
@@ -455,7 +453,7 @@ def expand_bfne(op, operands, pred):
 def expand_push(operands):
     check_operands_n(operands, 1)
     pre = [('sub', ['rsp', 'rsp', 'r0', '4'])]
-    success, imm = parse_imm(operands[0])
+    success, imm = parse_int(operands[0])
     if success:
         return mov_imm('r29', imm) + pre + [('st', ['r29', 'rsp', '0'])]
     return pre + [('st', [operands[0], 'rsp', '0'])]
@@ -485,7 +483,7 @@ def expand_ret(operands):
 
 def expand_enter(operands):
     check_operands_n(operands, 0, 1)
-    success, imm = parse_imm(operands[0] if operands else '0')
+    success, imm = parse_int(operands[0] if operands else '0')
     if success:
         if imm & 3 != 0:
             error('immediate value must be a multiple of 4')
@@ -582,7 +580,7 @@ def add_global(label):
     labels[label][filename][1] = True
 
 def label_addr(label, cur=-1):
-    if parse_imm(label)[0]:
+    if parse_int(label)[0]:
         return label
     dic = labels.get(label, {})
     if filename in dic:
@@ -636,7 +634,7 @@ def init_label(lines, jump_main, long_label):
             add_label(mnemonic[:-1], addr)
         elif mnemonic == '.align':
             check_operands_n(operands, 1)
-            success, imm = parse_imm(operands[0])
+            success, imm = parse_int(operands[0])
             if not success:
                 error('expected integer literal: ' + operands[0])
             if imm < 4 or (imm & (imm - 1)) > 0:
@@ -650,7 +648,7 @@ def init_label(lines, jump_main, long_label):
             add_global(operands[0])
         elif mnemonic == '.int':
             check_operands_n(operands, 2)
-            success, imm = parse_imm(operands[1])
+            success, imm = parse_int(operands[1])
             if not success:
                 error('expected integer literal: ' + operands[1])
             addr += 4 * imm
@@ -709,7 +707,7 @@ if args.l:
     library = map(os.path.relpath, args.l)
     args.inputs = library + args.inputs
 if args.e:
-    success, entry_point = parse_imm(args.e)
+    success, entry_point = parse_int(args.e)
     if not success:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: expected integer: ' + args.e)
@@ -775,12 +773,12 @@ for mnemonic, operands, filename, pos in lines2:
                     if operands[0] == 'main':
                         operands[0] = 'r29'
                     next_line = ('ldh', [operands[0], operands[0], hex(val >> 16)])
-                elif not check_imm_range(val, 16):
+                elif not check_int_range(val, 16):
                     error('expression value too large (do not use -n option): ' + hex(val))
                 mnemonic = 'ldl'
                 operands[1] = '{:#06x}'.format(val & 0xffff)
             else:
-                operands[idx] = str(val) if check_imm_range(val, 8) else hex(val)
+                operands[idx] = str(val) if check_int_range(val, 8) else hex(val)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
             operands[-1] = label_addr(operands[-1], addr)
