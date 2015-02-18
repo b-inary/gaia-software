@@ -312,9 +312,9 @@ def mov_imm(dest, imm):
     if not -0x80000000 <= imm <= 0xffffffff:
         error('immediate value too large')
     if imm & 0xffff == 0:
-        return [('ldh', [dest, 'r0', str((imm >> 16) & 0xffff)])]
-    return [('ldl', [dest, str(imm & 0xffff)]),
-            ('ldh', [dest, dest, str((imm >> 16) & 0xffff)])]
+        return [('ldh', [dest, 'r0', hex((imm >> 16) & 0xffff)])]
+    return [('ldl', [dest, hex(imm & 0xffff)]),
+            ('ldh', [dest, dest, hex((imm >> 16) & 0xffff)])]
 
 def expand_mov(operands):
     check_operands_n(operands, 2)
@@ -341,7 +341,7 @@ def expand_mov(operands):
     if success:
         return mov_imm(operands[0], float_to_bit(imm))
     if is_reg(operands[0]):
-        return [('__movl', operands)]
+        return [('mov', operands)]
     error('invalid syntax')
 
 # and, sub, shl, shr, sar, or, xor, cmpne, cmpeq, cmplt, cmple
@@ -571,11 +571,6 @@ entry_point = 0x3000
 start_label = 'main'
 
 def add_label(label, i):
-    if not -0x80000000 <= i <= 0xffffffff:
-        if label == start_label:
-            fatal('address of start label is too large')
-        else:
-            error('label address too large')
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     if labels[label][filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
@@ -632,7 +627,7 @@ def init_label(lines, jump_main, long_label):
     rev_labels = {}
     ret = []
     if jump_main:
-        ret = [('__movl', ['main', start_label], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
+        ret = [('mov', ['main', start_label], '', 0), ('', [], '', 0), ('jr', ['r29'], '', 0)]
     addr = entry_point + 4 * len(ret)
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
@@ -663,7 +658,7 @@ def init_label(lines, jump_main, long_label):
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
             add_label(operands[0], eval_expr(operands[1]))
-        elif mnemonic == '__movl' and long_label:
+        elif mnemonic == 'mov' and long_label:
             addr += 8
             ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
         else:
@@ -766,20 +761,26 @@ for mnemonic, operands, filename, pos in lines2:
         lines3.append((next_line[0], next_line[1], filename, pos))
         next_line = None
     else:
-        if mnemonic in ['ld', 'st', '.int', '__movl']:
+        if mnemonic in ['ld', 'st', '.int', 'mov']:
             check_operands_n(operands, 1, 3)
             idx = 0 if mnemonic == '.int' else -1
             val = eval_expr(operands[idx])
-            operands[idx] = str(val) if check_imm_range(val, 8) else hex(val)
-            if mnemonic == '__movl':
+            if mnemonic == 'mov':
+                if not -0x80000000 <= val <= 0xffffffff:
+                    if operands[0] == 'main':
+                        fatal('address of start label is too large: ' + hex(val))
+                    else:
+                        error('expression value too large: ' + hex(val))
                 if not args.n or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
-                    next_line = ('ldh', [operands[0], operands[0], '{:#06x}'.format(int(operands[1], 0) >> 16)])
-                elif not check_imm_range(int(operands[1]), 16):
-                    error('label out of range')
+                    next_line = ('ldh', [operands[0], operands[0], hex(val >> 16)])
+                elif not check_imm_range(val, 16):
+                    error('expression value too large (do not use -n option): ' + hex(val))
                 mnemonic = 'ldl'
-                operands[1] = '{:#06x}'.format(int(operands[1], 0) & 0xffff)
+                operands[1] = '{:#06x}'.format(val & 0xffff)
+            else:
+                operands[idx] = str(val) if check_imm_range(val, 8) else hex(val)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
             operands[-1] = label_addr(operands[-1], addr)
