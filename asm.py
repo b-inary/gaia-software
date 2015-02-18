@@ -568,17 +568,14 @@ labels = {}
 rev_labels = {}
 library = []
 entry_point = 0x3000
-long_label = False
 start_label = 'main'
 
 def add_label(label, i):
-    global long_label
     if not -0x80000000 <= i <= 0xffffffff:
         if label == start_label:
             fatal('address of start label is too large')
         else:
             error('label address too large')
-    long_label |= not check_imm_range(i, 16)
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     if labels[label][filename][0] >= 0:
         error('duplicate declaration of label \'{}\''.format(label))
@@ -702,7 +699,7 @@ argparser.add_argument('-e', help='set entry point address', metavar='<integer>'
 argparser.add_argument('-f', help='append label to end of program', metavar='<label>')
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>', action='append')
-argparser.add_argument('-n', help='assure long label assignment does not appear', action='store_true')
+argparser.add_argument('-n', help='expand mov expression macro to 1 operation', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
@@ -760,11 +757,7 @@ if args.Wr29:
             warning('r29 is used', True)
 
 # 2. label resolution (by 2-pass algorithm)
-lines2 = init_label(lines1, not args.r, False)
-if args.n:
-    long_label = False
-if long_label:
-    lines2 = init_label(lines1, not args.r, True)
+lines2 = init_label(lines1, not args.r, not args.n)
 lines3 = []
 addr = entry_point
 next_line = None
@@ -776,16 +769,17 @@ for mnemonic, operands, filename, pos in lines2:
         if mnemonic in ['ld', 'st', '.int', '__movl']:
             check_operands_n(operands, 1, 3)
             idx = 0 if mnemonic == '.int' else -1
-            operands[idx] = str(eval_expr(operands[idx]))
+            val = eval_expr(operands[idx])
+            operands[idx] = str(val) if check_imm_range(val, 8) else hex(val)
             if mnemonic == '__movl':
-                if long_label or operands[0] == 'main':
+                if not args.n or operands[0] == 'main':
                     if operands[0] == 'main':
                         operands[0] = 'r29'
-                    next_line = ('ldh', [operands[0], operands[0], '{:#06x}'.format(int(operands[1]) >> 16)])
+                    next_line = ('ldh', [operands[0], operands[0], '{:#06x}'.format(int(operands[1], 0) >> 16)])
                 elif not check_imm_range(int(operands[1]), 16):
                     error('label out of range')
                 mnemonic = 'ldl'
-                operands[1] = '{:#06x}'.format(int(operands[1]) & 0xffff)
+                operands[1] = '{:#06x}'.format(int(operands[1], 0) & 0xffff)
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
             operands[-1] = label_addr(operands[-1], addr)
