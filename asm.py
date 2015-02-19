@@ -680,7 +680,7 @@ def warn_unused_label(label):
 
 def show_label(i):
     if i in rev_labels:
-        return '# {}'.format(', '.join(rev_labels[i]))
+        return format(', '.join(rev_labels[i]))
     return ''
 
 
@@ -704,6 +704,7 @@ argparser.add_argument('-s', help='output preprocessed assembly', action='store_
 argparser.add_argument('-start', help='start execution from <label>', metavar='<label>')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
 argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
+argparser.add_argument('-v', help='output more detail assembly than -s', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
@@ -798,16 +799,28 @@ for mnemonic, operands, filename, pos in lines1:
         warn_unused_label(mnemonic[:-1])
 
 # 3. assemble
-if args.s:
+if args.s or args.v:
     with open(args.o + '.s', 'w') as f:
         addr = entry_point
+        prev_pos = -1
         prev_file = ''
         for mnemonic, operands, filename, pos in lines3:
             if prev_file != filename:
                 print >> f, '\n# file: ' + filename
                 prev_file = filename
-            s = '{:#08x}  {:7} {:19} '.format(addr, mnemonic, ', '.join(operands))
-            print >> f, (s + show_label(addr)).rstrip()
+            s = '{:#08x}  {:7} {}'.format(addr, mnemonic, ', '.join(operands))
+            l = show_label(addr)
+            if args.v:
+                b = code(mnemonic, operands)
+                comment = '# [{:#010x}]  '.format(struct.unpack('>I', b[0:4])[0])
+                if l:
+                    comment += '(' + l + ')  '
+                if prev_pos != pos and filename:
+                    comment += srcs[filename][pos]
+                    prev_pos = pos
+            else:
+                comment = '# ' + l if l else ''
+            print >> f, '{:39} {}'.format(s, comment).rstrip()
             if mnemonic == '.int':
                 addr += 4 * (int(operands[1], 0) - 1)
             addr += 4
