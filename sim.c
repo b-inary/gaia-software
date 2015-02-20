@@ -250,7 +250,7 @@ void exec_misc(uint32_t inst)
         case 12:
             if (reg[rx] & 3)
                 error("jr: register corrupted: r%d", rx);
-            if (to_physical(reg[rx]) >= entry_point + prog_size && !boot_test)
+            if (to_physical(reg[rx]) >= mem_size)
                 error("jr: jump destination out of range: r%d", rx);
             pc = reg[rx] - 4;
             return;
@@ -369,7 +369,7 @@ void runsim()
         uint32_t phys_pc;
         interrupt();
         phys_pc = to_physical(pc);
-        if (phys_pc >= entry_point + prog_size && !boot_test)
+        if (phys_pc >= mem_size)
             error("program counter out of range");
         if (mem[phys_pc >> 2] == HALT_CODE) break;
         exec(mem[phys_pc >> 2]);
