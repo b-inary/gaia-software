@@ -39,8 +39,7 @@ L_case_trap_0_2:
   mov r1, 75
   mov [r3], r1
   mov r3, 8192
-  mov r1, 8192
-  mov r1, [r1]
+  mov r1, [8192]
   mov [r3], r1
   br L2
 L_case_trap_0_3:
@@ -54,8 +53,7 @@ L_default_trap_0:
   mov [r3], r1
   br L2
 L1:
-  mov r1, 8460
-  mov r1, [r1]
+  mov r1, [8460]
   mov r3, 3
   beq r1, r3, L_case_trap_0_3
   mov r3, 2
@@ -64,6 +62,10 @@ L1:
   beq r1, r3, L_case_trap_0_1
   br L_default_trap_0
 L2:
+  mov r1, 8456
+  mov r3, [8456]
+  sub r3, r3, 4
+  mov [r1], r3
 sysexit
   mov r1, 0
   leave

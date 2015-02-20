@@ -234,11 +234,9 @@ void exec_misc(uint32_t inst)
             irq_bits |= 1 << IRQ_SYSENTER;
             return;
         case 5:
-            pc = mem[0x2108 >> 2];
+            pc = mem[0x2108 >> 2] - 4;
             mem[0x2104 >> 2] = 1;
-            if (mem[0x210c >> 2] != IRQ_PSEUDO) // Cause of interrupt
-                irq_bits &= ~(1 << mem[0x210c >> 2]);
-            return;
+            irq_bits &= ~(1 << mem[0x210c >> 2]);
         case 6:
             store(ra, disp, reg[rx]);
             return;
@@ -302,9 +300,9 @@ void interrupt()
     update_irqbits();
     if (irq_bits && mem[0x2104 >> 2]) {
         mem[0x210c >> 2] = __builtin_ctz(irq_bits); // IRQ number
-        mem[0x2108 >> 2] = pc;
+        mem[0x2108 >> 2] = pc + 4; // GAIA cpus store interrupted address + 4.
         mem[0x2104 >> 2] = 0;
-        pc = mem[0x2100 >> 2] - 4;
+        pc = mem[0x2100 >> 2];
     }
 }
 
@@ -368,12 +366,13 @@ void runsim()
     init_env();
     load_file();
     while (1) {
-        uint32_t phys_pc = to_physical(pc);
+        uint32_t phys_pc;
+        interrupt();
+        phys_pc = to_physical(pc);
         if (phys_pc >= entry_point + prog_size && !boot_test)
             error("program counter out of range");
         if (mem[phys_pc >> 2] == HALT_CODE) break;
         exec(mem[phys_pc >> 2]);
-        interrupt();
         pc += 4;
         ++inst_cnt;
     }

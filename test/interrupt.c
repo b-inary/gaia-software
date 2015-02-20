@@ -36,6 +36,7 @@ void trap()
         default:
             *SERIAL = 'E';
     }
+    *(int*)0x2108 = *(int*)0x2108 - 4; // GAIA processors store interrupted address + 4, so we have to do some math.
     __asm ("sysexit\n");
 }
 
