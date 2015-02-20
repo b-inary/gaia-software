@@ -151,23 +151,16 @@ uint32_t to_physical(uint32_t addr)
 
 int has_input()
 {
-    struct timeval zero = {0, 0};
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(fileno(stdin), &fds);
-    return select(fileno(stdin) + 1, &fds, NULL, NULL, &zero);
+    int c = getchar();
+    if (c == EOF)
+        return 0;
+    ungetc(c, stdin);
+    return 1;
 }
 
 uint32_t serial_read()
 {
-    int res;
-    if (has_input()) {
-        res = getchar();
-        if (res == EOF) error("read: reached EOF");
-    } else {
-        res = (uint32_t) -1;
-    }
-    return res;
+    return getchar();
 }
 
 void serial_write(uint32_t x)
@@ -334,7 +327,10 @@ void init_term()
     tcgetattr(fileno(stdin), &ttystate);
     original_ttystate = ttystate;
     cfmakeraw(&ttystate);
+    ttystate.c_lflag |= ISIG;
     ttystate.c_oflag |= OPOST;
+    ttystate.c_cc[VMIN] = 0;
+    ttystate.c_cc[VTIME] = 0;
     tcsetattr(fileno(stdin), TCSANOW, &ttystate);
 }
 
