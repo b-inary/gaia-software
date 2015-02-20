@@ -54,6 +54,8 @@ def regnum(reg):
 
 def parse_int(s):
     try:
+        if len(s) == 3 and s[0] == s[2] == '\'':
+            return True, ord(s[1])
         return True, int(s, 0)
     except ValueError:
         return False, 0
@@ -408,6 +410,12 @@ def expand_read(operands):
 
 def expand_write(operands):
     check_operands_n(operands, 1)
+    success, imm = parse_int(operands[0])
+    if success:
+        return mov_imm('r29', imm) + [('st', ['r29', 'r0', '0x2000'])]
+    if len(operands[0]) >= 3 and operands[0][0] == operands[0][-1] == '\"':
+        s = operands[0][1:-1]
+        return sum([mov_imm('r29', ord(c)) + [('st', ['r29', 'r0', '0x2000'])] for c in s], [])
     return [('st', [operands[0], 'r0', '0x2000'])]
 
 def expand_br(operands):
@@ -701,10 +709,10 @@ argparser.add_argument('-n', help='expand mov expression macro to 1 operation', 
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
-argparser.add_argument('-start', help='start execution from <label>', metavar='<label>')
+argparser.add_argument('-start', '-t', help='start execution from <label>', metavar='<label>')
+argparser.add_argument('-v', help='output more detail assembly than -s', action='store_true')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
 argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
-argparser.add_argument('-v', help='output more detail assembly than -s', action='store_true')
 args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)

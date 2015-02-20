@@ -57,6 +57,7 @@ main:
     mov     rsp, rbp
     mov     r1, 2
     mov     r1, 234567
+    mov     r1, 'a'
     mov     r1, 1.0
     mov     r1, 2.3
     mov     r1, label + label2 * 3
@@ -82,6 +83,8 @@ main:
     fcmpge  r1, r2, r3
     read    r1
     write   r1
+    write   42
+    write   "Hello"
     br      label
     bz+     r1, label2
     bnz-    r1, label3
