@@ -237,6 +237,7 @@ void exec_misc(uint32_t inst)
             pc = mem[0x2108 >> 2] - 4;
             mem[0x2104 >> 2] = 1;
             irq_bits &= ~(1 << mem[0x210c >> 2]);
+            return;
         case 6:
             store(ra, disp, reg[rx]);
             return;
