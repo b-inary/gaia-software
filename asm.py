@@ -54,8 +54,6 @@ def regnum(reg):
 
 def parse_int(s):
     try:
-        if len(s) == 3 and s[0] == s[2] == '\'':
-            return True, ord(s[1])
         return True, int(s, 0)
     except ValueError:
         return False, 0
@@ -414,8 +412,11 @@ def expand_write(operands):
     if success:
         return mov_imm('r29', imm) + [('st', ['r29', 'r0', '0x2000'])]
     if len(operands[0]) >= 3 and operands[0][0] == operands[0][-1] == '\"':
-        s = operands[0][1:-1]
-        return sum([mov_imm('r29', ord(c)) + [('st', ['r29', 'r0', '0x2000'])] for c in s], [])
+        try:
+            s = eval(operands[0])
+            return sum([mov_imm('r29', ord(c)) + [('st', ['r29', 'r0', '0x2000'])] for c in s], [])
+        except Exception:
+            error('invalid string')
     return [('st', [operands[0], 'r0', '0x2000'])]
 
 def expand_br(operands):
@@ -628,7 +629,7 @@ def eval_expr(expr):
         if not isinstance(res, int):
             error('expression type must be int')
         return res
-    except StandardError:
+    except Exception:
         error('eval error: ' + expr)
 
 def init_label(lines, jump_main, long_label):
