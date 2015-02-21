@@ -1,17 +1,20 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
-#define HALT_CODE   0xffffffff
-
-// print instructions before crash
-#define CRASH_TRACE_NUM 20
+#include <termios.h>
+#include "debug.h"
 
 // env
 extern uint32_t reg[32];
 extern uint32_t *mem;
 extern uint32_t pc;
 uint32_t to_physical(uint32_t);
+void print_env(int show_vpc);
+
+// defined in sim.c
+void init_term();
+void restore_term();
+void error(char*, ...);
 
 // disasm
 struct inst_struct{
@@ -22,76 +25,149 @@ struct inst_struct{
 void disasm(uint32_t inst, struct inst_struct *ip);
 
 //for debug func
+static int is_indebug = 0;
+void print_disasm(FILE*, uint32_t);
 void dump_e_i();
-void update_e_i(uint32_t);
+void update_e_i(uint32_t, uint32_t);
 
-//
-// debug settings
-// 
-int debug_condition(){
-  uint32_t phys_pc;
-  phys_pc = to_physical(pc);
-  if(reg[0] != 0) return 1;
-  if(mem[phys_pc >> 2] == HALT_CODE) return 2;
 
-  return 0;
-}
+void exec_debug(uint32_t inst)
+{
+  int tag = inst & 31;
+  uint32_t lit = (inst >> 5) & 255;
 
-void debug_routine(){
-  uint32_t phys_pc;
-  phys_pc = to_physical(pc);
-  update_e_i(mem[phys_pc >> 2]);
-}
-
-int debug(){
-  int cond;
-  cond = debug_condition();
-
-  debug_routine();
-
-  switch(cond){
-  case 1:
-    fprintf(stderr, "[DEBUG]: reg[0] != 0\n");
-    dump_e_i();
-    return 1;
-  case 2: 
-    fprintf(stderr, "[DEBUG]: halt\n");
-    dump_e_i();
-    return 1;
+  switch (tag) {
+    case OP_BREAK:
+      fprintf(stderr, "\x1b[1;31mbreak point %d:\x1b[39m\n", lit);
+      print_env(1);
+      is_indebug = 1;
+      break;
+    case OP_PENV:
+      fprintf(stderr, "\x1b[1;31mprint status. id %d:\x1b[39m\n", lit);
+      print_env(1);
+      break;
+    case OP_PTRACE:
+      fprintf(stderr, "\x1b[1;31mprint trace. id %d:\x1b[39m\n", lit);
+      dump_e_i();
+      break;
+    default:
+      error("instruction decode error");
   }
-  return 0;
+}
+
+void do_interactive_loop()
+{
+  char cmd[32];
+
+  fprintf(stderr, "help: c, n, stat, trace, mem and list commands are available.\n");
+  for (;;) {
+    fprintf(stderr, "> ");
+    if (fgets(cmd, sizeof(cmd), stdin) == NULL)
+      break;
+
+    if (strcmp("c\n", cmd) == 0) {
+      // continue
+      is_indebug = 0;
+      break;
+    } else if (strcmp("n\n", cmd) == 0) {
+      // next
+      break;
+    } else if (strcmp("stat\n", cmd) == 0) {
+      // print the simulation environment status
+      print_env(1);
+    } else if (strcmp("trace\n", cmd) == 0) {
+      // print the trace of last 20 instructions
+      dump_e_i();
+    } else if (strncmp("mem", cmd, 3) == 0) {
+      // print memory contents
+      int addr, count, argc;
+      int i;
+
+      if ((argc = sscanf(cmd, "mem %x %d", &addr, &count)) < 1) {
+        fprintf(stderr, "\x1b[1;31merror. mem command usage: mem 0xaddr [count]\x1b[39m\n");
+      } else {
+        if (argc < 2)
+          count = 1;
+        for (i = 0; i < count; i++)
+          fprintf(stderr, "0x%08x: 0x%08x\n", addr + i * 4, mem[to_physical(addr + i * 4) >> 2]);
+      }
+    } else if (strncmp("list", cmd, 4) == 0) {
+      // print the next N instructions
+      int count, argc;
+      int i;
+
+      argc = sscanf(cmd, "list %d", &count);
+      if (argc < 1)
+        count = 10;
+      for (i = 0; i < count; i++) {
+        fprintf(stderr, "0x%08x: ", pc + i * 4);
+        print_disasm(stderr, mem[to_physical(pc + i * 4) >> 2]);
+      }
+    }
+    else {
+      fprintf(stderr, "unknown command %s\n", cmd);
+    }
+  }
+}
+
+void debug_hook()
+{
+  uint32_t phys_pc;
+
+  phys_pc = to_physical(pc);
+  update_e_i(pc, mem[phys_pc >> 2]);
+  if (is_indebug) {
+    struct termios ttystate;
+
+    tcgetattr(fileno(stdin), &ttystate);
+    restore_term();
+
+    fprintf(stderr, "0x%08x: ", pc);
+    print_disasm(stderr, mem[phys_pc >> 2]);
+    do_interactive_loop();
+
+    tcsetattr(fileno(stdin), TCSANOW, &ttystate);
+  }
 }
 
 // 
 // crash trace
 //
 uint32_t e_inst[CRASH_TRACE_NUM];
+uint32_t e_inst_loc[CRASH_TRACE_NUM];
 
 void dump_e_i(){
   int i;
-  struct inst_struct ip;
-  fprintf(stderr, "code | opname, [rx, ra, rb], [literal], [displacement]\n");
+  fprintf(stderr, "address | code | opname, [rx, ra, rb], [literal], [displacement]\n");
   for(i=0; i<CRASH_TRACE_NUM; i++){
-    fprintf(stderr, "%x ", e_inst[i]);
-    disasm(e_inst[i], &ip);
-    fprintf(stderr, "%s, [%d, %d, %d], [%d], [%d]\n", 
-        ip.opname, 
-        ip.rx, ip.ra, ip.rb,
-        ip.literal,
-        ip.displacement);
+    fprintf(stderr, "0x%08x | 0x%08x | ", e_inst_loc[i], e_inst[i]);
+    print_disasm(stderr, e_inst[i]);
   }
 }
-void update_e_i(uint32_t now_i){
+void update_e_i(uint32_t pc, uint32_t now_i){
   int i;
   for(i=CRASH_TRACE_NUM-1; i-1>=0; i--){
     e_inst[i] = e_inst[i-1];
+    e_inst_loc[i] = e_inst_loc[i-1];
   }
   e_inst[0] = now_i;
+  e_inst_loc[0] = pc;
 }
 
 //
 // disasm
 //
+void print_disasm(FILE *out, uint32_t inst)
+{
+  struct inst_struct ip;
+  disasm(inst, &ip);
+  fprintf(out, "%s, [%d, %d, %d], [%d], [%d]\n",
+      ip.opname,
+      ip.rx, ip.ra, ip.rb,
+      ip.literal,
+      ip.displacement);
+}
+
 void alu_opname(int tag, struct inst_struct *ip)
 {
     switch (tag) {
