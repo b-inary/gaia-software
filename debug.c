@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#define HALT_CODE   0xffffffff
+
 // print instructions before crash
 #define CRASH_TRACE_NUM 20
 
@@ -27,6 +29,8 @@ void update_e_i(uint32_t);
 // debug settings
 // 
 int debug_condition(){
+  uint32_t phys_pc;
+  phys_pc = to_physical(pc);
   if(reg[0] != 0) return 1;
   if(mem[phys_pc >> 2] == HALT_CODE) return 2;
 
