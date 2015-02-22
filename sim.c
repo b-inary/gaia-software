@@ -10,6 +10,9 @@
 #include <termios.h>
 #include <unistd.h>
 
+// 0: OFF, 1:ON
+#define DEBUG 0
+
 #define HALT_CODE   0xffffffff
 
 #define IRQ_PSEUDO   0
@@ -32,6 +35,7 @@ int show_stat, boot_test, mmu_enabled = 1, interrupt_enabled = 1;
 
 uint32_t to_physical(uint32_t);
 void restore_term();
+int debug();
 
 void print_env(int show_vpc)
 {
@@ -372,6 +376,9 @@ void runsim()
         phys_pc = to_physical(pc);
         if (phys_pc >= mem_size)
             error("program counter out of range");
+#if DEBUG == 1
+        if (debug()) break;
+#endif
         if (mem[phys_pc >> 2] == HALT_CODE) break;
         exec(mem[phys_pc >> 2]);
         pc += 4;
