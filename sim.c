@@ -395,6 +395,7 @@ void print_help(char *prog)
     fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
     fprintf(stderr, "  -simple           same as '-no-mmu -no-interrupt'\n");
     fprintf(stderr, "  -stat             show simulator status\n");
+    fprintf(stderr, "  -debug            enable debugging feature\n");
     exit(1);
 }
 
@@ -416,6 +417,8 @@ void parse_cmd(int argc, char *argv[])
             interrupt_enabled = 0;
         } else if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
+        } else if (strcmp(argv[i], "-debug") == 0) {
+            debug_enabled = 1;
         } else if (infile[0] != '\0') {
             fprintf(stderr, "error: multiple input files are specified\n");
             print_help(argv[0]);

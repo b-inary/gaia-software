@@ -2,6 +2,9 @@ void debug_hook();
 void dump_e_i();
 void exec_debug();
 
+// Disable debugging feature if simulation speed is needed. Default: 0
+extern int debug_enabled;
+
 // opcode constants
 #define OP_BREAK  1
 #define OP_PENV   2

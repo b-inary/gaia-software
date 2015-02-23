@@ -11,6 +11,8 @@ extern uint32_t pc;
 uint32_t to_physical(uint32_t);
 void print_env(int show_vpc);
 
+int debug_enabled;
+
 // defined in sim.c
 void init_term();
 void restore_term();
@@ -33,9 +35,12 @@ void update_e_i(uint32_t, uint32_t);
 
 void exec_debug(uint32_t inst)
 {
-  int tag = inst & 31;
-  uint32_t lit = (inst >> 5) & 255;
+  uint32_t tag, lit;
 
+  if (!debug_enabled)
+      return;
+  tag = inst & 31;
+  lit = (inst >> 5) & 255;
   switch (tag) {
     case OP_BREAK:
       fprintf(stderr, "\x1b[1;31mbreak point %d:\x1b[39m\n", lit);
@@ -114,6 +119,8 @@ void debug_hook()
 {
   uint32_t phys_pc;
 
+  if (!debug_enabled)
+      return;
   phys_pc = to_physical(pc);
   update_e_i(pc, mem[phys_pc >> 2]);
   if (is_indebug) {
@@ -138,6 +145,8 @@ uint32_t e_inst_loc[CRASH_TRACE_NUM];
 
 void dump_e_i(){
   int i;
+  if (!debug_enabled)
+      return;
   fprintf(stderr, "address | code | opname, [rx, ra, rb], [literal], [displacement]\n");
   for(i=0; i<CRASH_TRACE_NUM; i++){
     fprintf(stderr, "0x%08x | 0x%08x | ", e_inst_loc[i], e_inst[i]);
