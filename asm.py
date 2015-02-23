@@ -169,6 +169,12 @@ misc3_table = {
     'beq':      15,
 }
 
+debug_table = {
+    'break':     1,
+    'penv':      2,
+    'ptrace':    3,
+}
+
 sign_table = {
     '':          0,
     'neg':       1,
@@ -176,7 +182,7 @@ sign_table = {
     'abs.neg':   3,
 }
 
-def code_i(rx, ra, rb, imm, tag):
+def code_i(op, rx, ra, rb, imm, tag):
     x = regnum(rx)
     a = regnum(ra)
     b = regnum(rb)
@@ -185,7 +191,7 @@ def code_i(rx, ra, rb, imm, tag):
         error('expected integer literal: ' + imm)
     if not check_int_range(i, 8):
         error('immediate value too large: ' + imm)
-    c1 = x >> 1
+    c1 = (op << 4) + (x >> 1)
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
     c3 = ((b & 7) << 5) + ((i >> 3) & 31)
     c4 = ((i & 7) << 5) + tag
@@ -223,11 +229,11 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
 
 def on_alu3(operands, tag):
     check_operands_n(operands, 3)
-    return code_i(operands[0], operands[1], operands[2], '0', tag)
+    return code_i(0, operands[0], operands[1], operands[2], '0', tag)
 
 def on_alu4(operands, tag):
     check_operands_n(operands, 4)
-    return code_i(operands[0], operands[1], operands[2], operands[3], tag)
+    return code_i(0, operands[0], operands[1], operands[2], operands[3], tag)
 
 def on_fpu2(operands, sign, tag):
     check_operands_n(operands, 2)
@@ -252,6 +258,10 @@ def on_misc2(operands, op, pred, disp_mode):
 def on_misc3(operands, op, pred, disp_mode):
     check_operands_n(operands, 3)
     return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
+
+def on_debug(operands, tag):
+    check_operands_n(operands, 1)
+    return code_i(7, 'r0', 'r0', 'r0', operands[0], tag)
 
 def on_dot_int(operand):
     success, imm = parse_int(operand[0])
@@ -288,6 +298,8 @@ def code(mnemonic, operands):
         return on_misc2(operands, misc2_table[mnemonic], pred, disp_mode)
     if mnemonic in misc3_table:
         return on_misc3(operands, misc3_table[mnemonic], pred, disp_mode)
+    if mnemonic in debug_table:
+        return on_debug(operands, debug_table[mnemonic])
     if mnemonic == '.int':
         return on_dot_int(operands)
     error('unknown mnemonic \'{}\''.format(mnemonic))

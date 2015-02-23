@@ -51,6 +51,9 @@ main:
     fmul.abs.neg r1, r2, r3
     bne-    r1, r2, 4
     beq+    r1, r2, 4
+    break   5
+    penv    8
+    ptrace  13
 
     # macros
     nop
