@@ -9,6 +9,12 @@
     mov     rsp, MEMORY_SIZE
     mov     rbp, MEMORY_SIZE
 
+    # display prompt
+    write   "\r\n"
+    write   "GAIA Architecture\r\n"
+    write   "\r\n"
+    write   "Waiting for input...\r\n"
+
     # load file size
     read    r1
     read    r2
@@ -26,6 +32,10 @@
     mov     r3, ENTRY_POINT
     beq-    r1, r2, load_end
 load_loop:
+    and     r9, r2, 1023
+    bnz     r9, load_next
+    call    display_progress
+load_next:
     read    r5
     read    r6
     read    r7
@@ -41,6 +51,53 @@ load_loop:
     add     r2, r2, 4
     bne+    r1, r2, load_loop
 load_end:
+    write   "\rLoading completed!              \r\n"
+    write   "\r\n"
 
     # jump to entry point
     jr      r3
+
+
+display_progress:
+    enter
+    write   "\rLoading... ["
+    shr     r11, r2, 10
+    call    display_decimal
+    write   " kB / "
+    add     r11, r1, 1023
+    shr     r11, r11, 10
+    call    display_decimal
+    write   " kB]"
+    leave
+    ret
+
+display_decimal:
+    enter
+    blt     r11, 10, dec_lt10
+    blt     r11, 100, dec_lt100
+    blt     r11, 1000, dec_lt1000
+    mov     r12, 1000
+    call    display_digit
+    write   44      # ',' character
+dec_lt1000:
+    mov     r12, 100
+    call    display_digit
+dec_lt100:
+    mov     r12, 10
+    call    display_digit
+dec_lt10:
+    mov     r12, 1
+    call    display_digit
+    leave
+    ret
+
+display_digit:
+    mov     r13, 48
+    br      dig_cond
+dig_loop:
+    sub     r11, r11, r12
+    add     r13, r13, 1
+dig_cond:
+    bge     r11, r12, dig_loop
+    write   r13
+    ret
