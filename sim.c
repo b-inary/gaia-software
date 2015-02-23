@@ -282,14 +282,12 @@ void exec(uint32_t inst)
 
 void update_irqbits()
 {
-    static struct timeval tick;
-    struct timeval now;
+    static int tick;
 
     // TIMER
-    gettimeofday(&now, NULL);
-    if ((now.tv_sec - tick.tv_sec) * 1000000 + now.tv_usec - tick.tv_usec > 1000000 / 100) {
+    if (++tick > 66e6 / 1000) {
         irq_bits |= 1 << IRQ_TIMER;
-        gettimeofday(&tick, NULL);
+        tick = 0;
     }
 
     // SERIAL
