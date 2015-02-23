@@ -43,16 +43,16 @@ void exec_debug(uint32_t inst)
   lit = (inst >> 5) & 255;
   switch (tag) {
     case OP_BREAK:
-      fprintf(stderr, "\x1b[1;31mbreak point %d:\x1b[39m\n", lit);
+      fprintf(stderr, "\x1b[1;31mbreak point %d:\x1b[0;39m\n", lit);
       print_env(1);
       is_indebug = 1;
       break;
     case OP_PENV:
-      fprintf(stderr, "\x1b[1;31mprint status. id %d:\x1b[39m\n", lit);
+      fprintf(stderr, "\x1b[1;31mprint status. id %d:\x1b[0;39m\n", lit);
       print_env(1);
       break;
     case OP_PTRACE:
-      fprintf(stderr, "\x1b[1;31mprint trace. id %d:\x1b[39m\n", lit);
+      fprintf(stderr, "\x1b[1;31mprint trace. id %d:\x1b[0;39m\n", lit);
       dump_e_i();
       break;
     default:
@@ -89,7 +89,7 @@ void do_interactive_loop()
       int i;
 
       if ((argc = sscanf(cmd, "mem %x %d", &addr, &count)) < 1) {
-        fprintf(stderr, "\x1b[1;31merror. mem command usage: mem 0xaddr [count]\x1b[39m\n");
+        fprintf(stderr, "\x1b[1;31merror. mem command usage: mem 0xaddr [count]\x1b[0;39m\n");
       } else {
         if (argc < 2)
           count = 1;
