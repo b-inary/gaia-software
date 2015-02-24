@@ -414,22 +414,23 @@ def expand_fcmpge(operands):
 
 def expand_read(operands):
     check_operands_n(operands, 1)
-    return [('ld', [operands[0], 'r0', '0x2000']),
+    return [('ldh', ['r29', 'r0', '0x8000']),
+            ('ld', [operands[0], 'r29', '0x2000']),
             ('cmplt', ['r29', operands[0], 'r0', '0']),
-            ('bne', ['r29', 'r0', '-12'])]
+            ('bne', ['r29', 'r0', '-16'])]
 
 def expand_write(operands):
-    check_operands_n(operands, 1)
-    success, imm = parse_int(operands[0])
-    if success:
-        return mov_imm('r29', imm) + [('st', ['r29', 'r0', '0x2000'])]
-    if len(operands[0]) >= 3 and operands[0][0] == operands[0][-1] == '\"':
-        try:
-            s = eval(operands[0])
-            return sum([mov_imm('r29', ord(c)) + [('st', ['r29', 'r0', '0x2000'])] for c in s], [])
-        except Exception:
-            error('invalid string')
-    return [('st', [operands[0], 'r0', '0x2000'])]
+    check_operands_n(operands, 1, 2)
+    if len(operands) == 1:
+        return [('ldh', ['r29', 'r0', '0x8000']), ('st', [operands[0], 'r29', '0x2000'])]
+    try:
+        s = eval(operands[1])
+        if not isinstance(s, str):
+            error('invalid string: ' + operands[0])
+        l = [mov_imm(operands[0], ord(c)) + [('st', [operands[0], 'r29', '0x2000'])] for c in s]
+        return [('ldh', ['r29', 'r0', '0x8000'])] + sum(l, [])
+    except Exception:
+        error('invalid string: ' + operands[0])
 
 def expand_br(operands):
     check_operands_n(operands, 1)
@@ -583,7 +584,7 @@ def expand_macro(line):
 labels = {}
 rev_labels = {}
 library = []
-entry_point = 0x3000
+entry_point = 0x1000
 start_label = 'main'
 
 def add_label(label, i):

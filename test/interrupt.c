@@ -1,10 +1,10 @@
 
-#define CAUSE   ((int*) 0x210c)
-#define EPC     ((int*) 0x2108)
-#define INTENBL ((int*) 0x2104)
-#define HANDLER ((int*) 0x2100)
+#define CAUSE   ((int*) 0x8000210c)
+#define EPC     ((int*) 0x80002108)
+#define INTENBL ((int*) 0x80002104)
+#define HANDLER ((int*) 0x80002100)
 
-#define SERIAL ((char*) 0x2000)
+#define SERIAL ((char*) 0x80002000)
 
 #define IRQ_TIMER    1
 #define IRQ_SERIAL   2
@@ -29,14 +29,13 @@ void trap()
             *SERIAL = 'K';
             *SERIAL = *SERIAL;
             break;
-
         case IRQ_SYSENTER:
             *SERIAL = 'S';
             break;
         default:
             *SERIAL = 'E';
     }
-    *(int*)0x2108 = *(int*)0x2108 - 4; // GAIA processors store interrupted address + 4, so we have to do some math.
+    *(int*)0x80002108 = *(int*)0x80002108 - 4; // GAIA processors store interrupted address + 4, so we have to do some math.
     __asm ("sysexit\n");
 }
 
@@ -45,5 +44,5 @@ int main()
     *HANDLER = (int) trap;
     *INTENBL = 1;
 
-    for (;;)1+1;
+    for (;;);
 }

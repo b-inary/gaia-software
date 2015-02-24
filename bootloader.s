@@ -1,8 +1,8 @@
 
-# asm.py -e 0 -r
+# asm.py -e 0x80000000 -r
 
 # set constants
-.set    ENTRY_POINT, 0x3000
+.set    ENTRY_POINT, 0x1000
 .set    MEMORY_SIZE, 0x400000
 
     # init rsp and rbp
@@ -10,10 +10,10 @@
     mov     rbp, MEMORY_SIZE
 
     # display prompt
-    write   "\r\n"
-    write   "GAIA Architecture\r\n"
-    write   "\r\n"
-    write   "Waiting for input...\r\n"
+    write   r1, "\r\n"
+    write   r1, "GAIA Architecture\r\n"
+    write   r1, "\r\n"
+    write   r1, "Waiting for input...\r\n"
 
     # load file size
     read    r1
@@ -51,8 +51,8 @@ load_next:
     add     r2, r2, 4
     bne+    r1, r2, load_loop
 load_end:
-    write   "\rLoading completed!              \r\n"
-    write   "\r\n"
+    write   r1, "\rLoading completed!              \r\n"
+    write   r1, "\r\n"
 
     # jump to entry point
     jr      r3
@@ -60,14 +60,14 @@ load_end:
 
 display_progress:
     enter
-    write   "\rLoading... ["
+    write   r11, "\rLoading... ["
     shr     r11, r2, 10
     call    display_decimal
-    write   " kB / "
+    write   r11, " KB / "
     add     r11, r1, 1023
     shr     r11, r11, 10
     call    display_decimal
-    write   " kB]"
+    write   r11, " KB]"
     leave
     ret
 
@@ -78,7 +78,8 @@ display_decimal:
     blt     r11, 1000, dec_lt1000
     mov     r12, 1000
     call    display_digit
-    write   44      # ',' character
+    mov     r12, 44     # ',' character
+    write   r12
 dec_lt1000:
     mov     r12, 100
     call    display_digit

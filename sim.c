@@ -21,15 +21,16 @@
 uint32_t reg[32];
 uint32_t *mem;
 uint32_t mem_size = 0x400000;
-uint32_t entry_point = 0x3000;
+uint32_t entry_point = 0x1000;
 uint32_t pc;
 uint32_t prog_size;
-uint32_t irq_bits;
+uint32_t intr_addr, intr_enabled, epc, irq_num, irq_bits;
+uint32_t mmu_enabled, pd_addr;
 long long inst_cnt;
 struct termios original_ttystate;
 
 char infile[128];
-int show_stat, boot_test, mmu_enabled = 1, interrupt_enabled = 1;
+int show_stat, boot_test, sim_intr_disabled;
 
 uint32_t to_physical(uint32_t);
 void restore_term();
@@ -135,8 +136,8 @@ uint32_t fpu_sign(uint32_t x, int mode)
 uint32_t to_physical(uint32_t addr)
 {
     uint32_t tmp;
-    if (!mmu_enabled || mem[0x2200 >> 2] == 0) return addr;
-    tmp = mem[0x2204 >> 2] | ((addr >> 22) << 2);
+    if (!mmu_enabled) return addr;
+    tmp = pd_addr | ((addr >> 22) << 2);
     if (tmp & 3 || tmp >= mem_size)
         error("to_physical: PDE address error: 0x%08x, Requested virtual address: 0x%08x", tmp, addr);
     tmp = mem[tmp >> 2];
@@ -176,12 +177,20 @@ uint32_t load(int ra, uint32_t disp)
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
     if (addr & 3)
         error("load: address must be a multiple of 4: 0x%08x", addr);
-    if (addr >= mem_size)
-        error("load: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x2000)
-        return serial_read();
-    else
+    if (addr < mem_size) {
         return mem[addr >> 2];
+    } else {
+        switch (addr) {
+            case 0x80002000: return serial_read();
+            case 0x80002100: return intr_addr;
+            case 0x80002104: return intr_enabled;
+            case 0x80002108: return epc;
+            case 0x8000210c: return irq_num;
+            case 0x80002200: return mmu_enabled;
+            case 0x80002204: return pd_addr;
+            default: error("load: invalid address: 0x%08x", addr); return 0;
+        }
+    }
 }
 
 void store(int ra, uint32_t disp, uint32_t x)
@@ -189,12 +198,20 @@ void store(int ra, uint32_t disp, uint32_t x)
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
     if (addr & 3)
         error("store: address must be a multiple of 4: 0x%08x", addr);
-    if (addr >= mem_size)
-        error("store: exceed %dMB limit: 0x%08x", mem_size >> 20, addr);
-    if (addr == 0x2000)
-        serial_write(x);
-    else
+    if (addr < mem_size) {
         mem[addr >> 2] = x;
+    } else {
+        switch (addr) {
+            case 0x80002000: serial_write(x); break;
+            case 0x80002100: intr_addr = x; break;
+            case 0x80002104: intr_enabled = x; break;
+            case 0x80002108: epc = x; break;
+            case 0x8000210c: irq_num = x; break;
+            case 0x80002200: mmu_enabled = x; break;
+            case 0x80002204: pd_addr = x; break;
+            default: error("store: invalid address: 0x%08x", addr);
+        }
+    }
 }
 
 void exec_alu(uint32_t inst)
@@ -236,9 +253,9 @@ void exec_misc(uint32_t inst)
             irq_bits |= 1 << IRQ_SYSENTER;
             return;
         case 5:
-            pc = mem[0x2108 >> 2] - 4;
-            mem[0x2104 >> 2] = 1;
-            irq_bits &= ~(1 << mem[0x210c >> 2]);
+            pc = epc - 4;
+            intr_enabled = 1;
+            irq_bits &= ~(1 << irq_num);
             return;
         case 6:
             store(ra, disp, reg[rx]);
@@ -297,14 +314,14 @@ void update_irqbits()
 
 void interrupt()
 {
-    if (!interrupt_enabled)
+    if (sim_intr_disabled)
         return;
     update_irqbits();
-    if (irq_bits && mem[0x2104 >> 2]) {
-        mem[0x210c >> 2] = __builtin_ctz(irq_bits); // IRQ number
-        mem[0x2108 >> 2] = pc + 4; // GAIA cpus store interrupted address + 4.
-        mem[0x2104 >> 2] = 0;
-        pc = mem[0x2100 >> 2];
+    if (irq_bits && intr_enabled) {
+        intr_enabled = 0;
+        epc = pc + 4; // GAIA cpus store interrupted address + 4.
+        irq_num = __builtin_ctz(irq_bits); // IRQ number
+        pc = intr_addr;
     }
 }
 
@@ -322,7 +339,7 @@ void init_env()
 void init_term()
 {
     struct termios ttystate;
-    if (!isatty(fileno(stdin)) || !interrupt_enabled)
+    if (!isatty(fileno(stdin)) || sim_intr_disabled)
         return;
     tcgetattr(fileno(stdin), &ttystate);
     original_ttystate = ttystate;
@@ -336,7 +353,7 @@ void init_term()
 
 void restore_term()
 {
-    if (!isatty(fileno(stdin)) || !interrupt_enabled)
+    if (!isatty(fileno(stdin)) || sim_intr_disabled)
         return;
     tcsetattr(fileno(stdin), TCSANOW, &original_ttystate);
 }
@@ -388,12 +405,11 @@ void print_help(char *prog)
     fprintf(stderr, "usage: %s [options] file\n", prog);
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -boot-test        bootloader test mode\n");
-    fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
-    fprintf(stderr, "  -no-mmu           disable MMU feature\n");
-    fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
-    fprintf(stderr, "  -simple           same as '-no-mmu -no-interrupt'\n");
-    fprintf(stderr, "  -stat             show simulator status\n");
     fprintf(stderr, "  -debug            enable debugging feature\n");
+    fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
+    fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
+    fprintf(stderr, "  -simple           same as -no-interrupt\n");
+    fprintf(stderr, "  -stat             show simulator status\n");
     exit(1);
 }
 
@@ -403,20 +419,17 @@ void parse_cmd(int argc, char *argv[])
         if (strcmp(argv[i], "-boot-test") == 0) {
             entry_point = 0;
             boot_test = 1;
+        } else if (strcmp(argv[i], "-debug") == 0) {
+            debug_enabled = 1;
         } else if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
-        } else if (strcmp(argv[i], "-no-mmu") == 0) {
-            mmu_enabled = 0;
         } else if (strcmp(argv[i], "-no-interrupt") == 0) {
-            interrupt_enabled = 0;
+            sim_intr_disabled = 1;
         } else if (strcmp(argv[i], "-simple") == 0) {
-            mmu_enabled = 0;
-            interrupt_enabled = 0;
+            sim_intr_disabled = 1;
         } else if (strcmp(argv[i], "-stat") == 0) {
             show_stat = 1;
-        } else if (strcmp(argv[i], "-debug") == 0) {
-            debug_enabled = 1;
         } else if (infile[0] != '\0') {
             fprintf(stderr, "error: multiple input files are specified\n");
             print_help(argv[0]);
