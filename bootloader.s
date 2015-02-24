@@ -2,7 +2,7 @@
 # asm.py -e 0x80000000 -r
 
 # set constants
-.set    ENTRY_POINT, 0x1000
+.set    ENTRY_POINT, 0x2000
 .set    MEMORY_SIZE, 0x400000
 
     # init rsp and rbp

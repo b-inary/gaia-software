@@ -21,7 +21,7 @@
 uint32_t reg[32];
 uint32_t *mem;
 uint32_t mem_size = 0x400000;
-uint32_t entry_point = 0x1000;
+uint32_t entry_point = 0x2000;
 uint32_t pc;
 uint32_t prog_size;
 uint32_t intr_addr, intr_enabled, epc, irq_num, irq_bits;
@@ -181,13 +181,13 @@ uint32_t load(int ra, uint32_t disp)
         return mem[addr >> 2];
     } else {
         switch (addr) {
-            case 0x80002000: return serial_read();
-            case 0x80002100: return intr_addr;
-            case 0x80002104: return intr_enabled;
-            case 0x80002108: return epc;
-            case 0x8000210c: return irq_num;
-            case 0x80002200: return mmu_enabled;
-            case 0x80002204: return pd_addr;
+            case 0x80001000: return serial_read();
+            case 0x80001100: return intr_addr;
+            case 0x80001104: return intr_enabled;
+            case 0x80001108: return epc;
+            case 0x8000110c: return irq_num;
+            case 0x80001200: return mmu_enabled;
+            case 0x80001204: return pd_addr;
             default: error("load: invalid address: 0x%08x", addr); return 0;
         }
     }
@@ -202,13 +202,13 @@ void store(int ra, uint32_t disp, uint32_t x)
         mem[addr >> 2] = x;
     } else {
         switch (addr) {
-            case 0x80002000: serial_write(x); break;
-            case 0x80002100: intr_addr = x; break;
-            case 0x80002104: intr_enabled = x; break;
-            case 0x80002108: epc = x; break;
-            case 0x8000210c: irq_num = x; break;
-            case 0x80002200: mmu_enabled = x; break;
-            case 0x80002204: pd_addr = x; break;
+            case 0x80001000: serial_write(x); break;
+            case 0x80001100: intr_addr = x; break;
+            case 0x80001104: intr_enabled = x; break;
+            case 0x80001108: epc = x; break;
+            case 0x8000110c: irq_num = x; break;
+            case 0x80001200: mmu_enabled = x; break;
+            case 0x80001204: pd_addr = x; break;
             default: error("store: invalid address: 0x%08x", addr);
         }
     }

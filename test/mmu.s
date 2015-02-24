@@ -30,15 +30,15 @@ main:
     mov     r7, main
     shr     r7, r7, 10
     add     r7, r7, r2
-    mov     [r7], main + 1      # Create an entry of pte1. Map [0x8000, 0x9000) to [0x8000, 0x9000) to virtualize pc.
+    mov     [r7], main + 1      # Create an entry of pte1.
     add     r7, r5, 1
     mov     [r3 + 3348], r7     # Set the address of data to 837th entry of pte2. Map 0x12345000 to data
     add     r7, r6, 1
     mov     [r3 + 3204], r7     # Map 0x12321000 to output
-    mov     [r4 + 8], 0x80002001# Create an entry of pte1. Map [0x80002000, 0x80003000) to [0x80002000, 0x80003000) for write operation.
+    mov     [r4 + 4], 0x80001001# Create an entry of pte1. Map [0x80001000, 0x80002000) to [0x80001000, 0x80002000) for write operation.
     mov     r2, 0x80000000
-    mov     [r2 + 0x2204], r1   # Register the address of PDE to the system memory
-    mov     [r2 + 0x2200], 1    # Enable virtual memory
+    mov     [r2 + 0x1204], r1   # Register the address of PDE to the system memory
+    mov     [r2 + 0x1200], 1    # Enable virtual memory
     mov     r1, 0x12321000      # store the virtual address of output
     jr      r1
 
