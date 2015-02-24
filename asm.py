@@ -808,7 +808,7 @@ if args.e:
     if entry_point & 3 != 0:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: entry address must be a multiple of 4')
-    if entry_point < 0
+    if entry_point < 0:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: entry address must be zero or positive')
 if args.start:
