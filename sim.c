@@ -54,6 +54,7 @@ void print_env(int show_vpc)
     fprintf(stderr, "<Number of executed instructions>: %lld\n", inst_cnt);
 }
 
+void error(char *, ...) __attribute__((noreturn));
 void error(char *fmt, ...)
 {
     va_list ap;
@@ -101,7 +102,7 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case 29: return bitfloat(reg[ra]) == bitfloat(reg[rb]);
         case 30: return bitfloat(reg[ra]) <  bitfloat(reg[rb]);
         case 31: return bitfloat(reg[ra]) <= bitfloat(reg[rb]);
-        default: error("instruction decode error (ALU)"); return 0;
+        default: error("instruction decode error (ALU)");
     }
 }
 
@@ -117,7 +118,7 @@ uint32_t fpu(int tag, int ra, int rb)
         case 6:  return (int32_t)roundf(bitfloat(reg[ra]));
         case 7:  return bitint((float)(int32_t)reg[ra]);
         case 8:  return bitint(floorf(bitfloat(reg[ra])));
-        default: error("instruction decode error (FPU)"); return 0;
+        default: error("instruction decode error (FPU)");
     }
 }
 
@@ -188,7 +189,7 @@ uint32_t load(int ra, uint32_t disp)
             case 0x8000110c: return irq_num;
             case 0x80001200: return mmu_enabled;
             case 0x80001204: return pd_addr;
-            default: error("load: invalid address: 0x%08x", addr); return 0;
+            default: error("load: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
         }
     }
 }
@@ -209,7 +210,7 @@ void store(int ra, uint32_t disp, uint32_t x)
             case 0x8000110c: irq_num = x; break;
             case 0x80001200: mmu_enabled = x; break;
             case 0x80001204: pd_addr = x; break;
-            default: error("store: invalid address: 0x%08x", addr);
+            default: error("store: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
         }
     }
 }
@@ -282,7 +283,6 @@ void exec_misc(uint32_t inst)
             return;
         default:
             error("instruction decode error");
-            return;
     }
 }
 
@@ -371,12 +371,12 @@ void load_file()
     for (uint32_t i = 0; i < prog_size; ++i) {
         int c = fgetc(fp);
         if (c == EOF)
-            error("load_file: invalid header");
+            error("load_file: reached EOF (actual size is less than header)");
         *((uint8_t*)mem + entry_point + (i ^ 3)) = c;
     }
 
     if (fgetc(fp) != EOF)
-        error("load_file: invalid header");
+        error("load_file: input file remained (actual size is more than header)");
     fclose(fp);
 }
 

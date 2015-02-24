@@ -362,7 +362,7 @@ def mov_imm(dest, imm):
     if check_int_range(imm, 16):
         return [('ldl', [dest, str(imm)])]
     if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value too large')
+        error('immediate value too large: ' + hex(imm))
     if imm & 0xffff == 0:
         return [('ldh', [dest, 'r0', hex((imm >> 16) & 0xffff)])]
     return [('ldl', [dest, hex(imm & 0xffff)]),
@@ -408,7 +408,7 @@ def expand_alu(op, operands):
         if check_int_range(imm, 8):
             return [(op, [operands[0], operands[1], 'r0', operands[2]])]
         return mov_imm('r29', imm) + [(op, [operands[0], operands[1], 'r29', '0'])]
-    error('invalid syntax')
+    error('expected register or immediate value: ' + operands[2])
 
 def expand_and(operands):
     check_operands_n(operands, 3, 4)
@@ -421,7 +421,7 @@ def expand_and(operands):
         if check_int_range(imm, 8):
             return [('and', [operands[0], operands[1], operands[1], operands[2]])]
         return mov_imm('r29', imm) + [('and', [operands[0], operands[1], 'r29', '-1'])]
-    error('invalid syntax')
+    error('expected register or immediate value: ' + operands[2])
 
 def expand_neg(operands):
     check_operands_n(operands, 2)
@@ -438,7 +438,7 @@ def expand_cmpgt(operands):
     success, imm = parse_int(operands[2])
     if success:
         return mov_imm('r29', imm) + [('cmplt', [operands[0], 'r29', operands[1], '0'])]
-    error('invalid syntax')
+    error('expected register or immediate value: ' + operands[2])
 
 def expand_cmpge(operands):
     check_operands_n(operands, 3)
@@ -447,7 +447,7 @@ def expand_cmpge(operands):
     success, imm = parse_int(operands[2])
     if success:
         return mov_imm('r29', imm) + [('cmple', [operands[0], 'r29', operands[1], '0'])]
-    error('invalid syntax')
+    error('expected register or immediate value: ' + operands[2])
 
 def expand_fcmpgt(operands):
     check_operands_n(operands, 3)
@@ -717,7 +717,7 @@ def init_label(lines, jump_main, long_label):
             if not success:
                 error('expected integer literal: ' + operands[0])
             if imm < 4 or (imm & (imm - 1)) > 0:
-                error('invalid alignment')
+                error('alignment must be a power of 2 which is not less than 4')
             padding = imm - (addr & (imm - 1));
             if padding < imm:
                 addr += padding
@@ -808,6 +808,9 @@ if args.e:
     if entry_point & 3 != 0:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: entry address must be a multiple of 4')
+    if entry_point < 0
+        argparser.print_usage(sys.stderr)
+        fatal('argument -e: entry address must be zero or positive')
 if args.start:
     start_label = args.start
 
