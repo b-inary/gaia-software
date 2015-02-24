@@ -110,6 +110,7 @@ main:
 
     # directives
     .byte   1, 2, 3
+    .string "literal"
     .align  4
     .int    42
     .int    0xdeadbeef, 3

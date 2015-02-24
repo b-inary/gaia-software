@@ -345,6 +345,15 @@ def code(mnemonic, operands):
 #       macro definitions
 # ----------------------------------------------------------------------
 
+def eval_string(arg):
+    try:
+        s = eval(arg)
+        if not isinstance(s, str):
+            error('expected string literal: ' + arg)
+        return s
+    except Exception:
+        error('invalid string literal: ' + arg)
+
 def expand_nop(operands):
     check_operands_n(operands, 0)
     return [('add', ['r0', 'r0', 'r0', '0'])]
@@ -459,14 +468,9 @@ def expand_write(operands):
     check_operands_n(operands, 1, 2)
     if len(operands) == 1:
         return [('ldh', ['r29', 'r0', '0x8000']), ('st', [operands[0], 'r29', '0x1000'])]
-    try:
-        s = eval(operands[1])
-        if not isinstance(s, str):
-            error('invalid string: ' + operands[0])
-        l = [mov_imm(operands[0], ord(c)) + [('st', [operands[0], 'r29', '0x1000'])] for c in s]
-        return [('ldh', ['r29', 'r0', '0x8000'])] + sum(l, [])
-    except Exception:
-        error('invalid string: ' + operands[0])
+    s = eval_string(operands[1])
+    l = [mov_imm(operands[0], ord(c)) + [('st', [operands[0], 'r29', '0x1000'])] for c in s]
+    return [('ldh', ['r29', 'r0', '0x8000'])] + sum(l, [])
 
 def expand_br(operands):
     check_operands_n(operands, 1)
@@ -573,6 +577,11 @@ def expand_dot_space(operands):
         return [('.space', operands)]
     return [('.space', [operands[0], '0'])]
 
+def expand_dot_string(operands):
+    check_operands_n(operands, 1)
+    s = eval_string(operands[0])
+    return [('.byte', [str(ord(c)) for c in s] + ['0'])]
+
 macro_table = {
     'nop':      expand_nop,
     'mov':      expand_mov,
@@ -596,6 +605,7 @@ macro_table = {
     '.int':     expand_dot_int,
     '.float':   expand_dot_float,
     '.space':   expand_dot_space,
+    '.string':  expand_dot_string,
 }
 
 def expand_macro(line):
