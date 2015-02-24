@@ -560,16 +560,16 @@ def expand_halt(operands):
 def expand_dot_int(operands):
     check_operands_n(operands, 1, 2)
     if len(operands) == 2:
+        warning('.int with 2 operands is deprecated, use .space instead', True)
         return [('.int', operands)]
     return [('.int', [operands[0], '1'])]
 
 def expand_dot_float(operands):
-    check_operands_n(operands, 1, 2)
+    check_operands_n(operands, 1)
     success, imm = parse_float(operands[0])
     if not success:
         error('expected floating point literal: ' + operands[0])
-    operands[0] = str(float_to_bit(imm))
-    return expand_dot_int(operands)
+    return expand_dot_int([str(float_to_bit(imm))])
 
 def expand_dot_space(operands):
     check_operands_n(operands, 1, 2)

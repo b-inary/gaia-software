@@ -113,10 +113,8 @@ main:
     .string "literal"
     .align  4
     .int    42
-    .int    0xdeadbeef, 3
     .int    label & ~label2
-    .float  1.2e34
-    .float  -3.141592, 3
+    .float  -1.2e34
     .set    label2, 0x1234
     .set    label3, label + label2 * 4
     .space  10

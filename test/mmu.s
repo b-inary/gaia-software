@@ -1,13 +1,13 @@
 
 .align 4096
 pde:
-    .int    0, 1024
+    .space  4096
 pte1:
-    .int    0, 1024
+    .space  4096
 pte2:
-    .int    0, 1024
+    .space  4096
 pte3:
-    .int    0, 1024
+    .space  4096
 data:
     .int    65
     .int    10
