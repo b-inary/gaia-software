@@ -109,13 +109,15 @@ main:
     halt
 
     # directives
-.align  256
-label2:
+    .byte   1, 2, 3
+    .align  4
     .int    42
     .int    0xdeadbeef, 3
     .int    label & ~label2
     .float  1.2e34
     .float  -3.141592, 3
-    .set    label3, 0x1234
-    .set    label4, label + label2 * 4
+    .set    label2, 0x1234
+    .set    label3, label + label2 * 4
+    .space  10
+    .space  2, 123
 

@@ -286,6 +286,24 @@ def on_dot_int(operands):
     cnt = int(operands[1], 0)
     return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
+def on_dot_byte(operand):
+    success, imm = parse_int(operand)
+    if not success:
+        error('expected integer literal: ' + operand)
+    if not -128 <= imm <= 255:
+        error('immediate value too large: ' + operand)
+    return chr(imm & 255)
+
+def on_dot_space(operands):
+    check_operands_n(operands, 2)
+    success, imm = parse_int(operands[1])
+    if not success:
+        error('expected integer literal: ' + operands[1])
+    if not -128 <= imm <= 255:
+        error('immediate value too large: ' + operand)
+    size = int(operands[0], 0)
+    return ''.ljust(size, chr(imm & 255))
+
 def code(mnemonic, operands):
     if mnemonic in alu3_table:
         return on_alu3(operands, alu3_table[mnemonic])
@@ -316,6 +334,10 @@ def code(mnemonic, operands):
         return on_debug(operands, debug_table[mnemonic])
     if mnemonic == '.int':
         return on_dot_int(operands)
+    if mnemonic == '.byte':
+        return ''.join(on_dot_byte(operand) for operand in operands)
+    if mnemonic == '.space':
+        return on_dot_space(operands)
     error('unknown mnemonic \'{}\''.format(mnemonic))
 
 
@@ -545,6 +567,12 @@ def expand_dot_float(operands):
     operands[0] = str(float_to_bit(imm))
     return expand_dot_int(operands)
 
+def expand_dot_space(operands):
+    check_operands_n(operands, 1, 2)
+    if len(operands) == 2:
+        return [('.space', operands)]
+    return [('.space', [operands[0], '0'])]
+
 macro_table = {
     'nop':      expand_nop,
     'mov':      expand_mov,
@@ -567,6 +595,7 @@ macro_table = {
     'halt':     expand_halt,
     '.int':     expand_dot_int,
     '.float':   expand_dot_float,
+    '.space':   expand_dot_space,
 }
 
 def expand_macro(line):
@@ -682,7 +711,10 @@ def init_label(lines, jump_main, long_label):
             padding = imm - (addr & (imm - 1));
             if padding < imm:
                 addr += padding
-                ret.append(('.int', ['0', str(padding >> 2)], filename, pos))
+                ret.append(('.space', [str(padding), '0'], filename, pos))
+        elif mnemonic == '.byte':
+            addr += len(operands)
+            ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.global':
             check_operands_n(operands, 1)
             add_global(operands[0])
@@ -696,12 +728,22 @@ def init_label(lines, jump_main, long_label):
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
             add_label(operands[0], eval_expr(operands[1]))
-        elif mnemonic == 'mov' and long_label:
-            addr += 8
-            ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
-        else:
-            addr += 4
+        elif mnemonic == '.space':
+            check_operands_n(operands, 2)
+            success, imm = parse_int(operands[0])
+            if not success:
+                error('expected integer literal: ' + operands[0])
+            addr += imm
             ret.append((mnemonic, operands, filename, pos))
+        else:
+            if addr & 3:
+                error('instruction must be aligned on 4-byte boundaries')
+            if mnemonic == 'mov' and long_label:
+                addr += 8
+                ret.extend([(mnemonic, operands, filename, pos), ('', [], filename, pos)])
+            else:
+                addr += 4
+                ret.append((mnemonic, operands, filename, pos))
     if addr - entry_point > 0x400000:
         fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
     return ret
@@ -798,36 +840,42 @@ addr = entry_point
 next_line = None
 for mnemonic, operands, filename, pos in lines2:
     if next_line:
+        addr += 4
         lines3.append((next_line[0], next_line[1], filename, pos))
         next_line = None
+        continue
+    if mnemonic in ['ld', 'st', '.int', 'mov']:
+        check_operands_n(operands, 1, 3)
+        idx = 0 if mnemonic == '.int' else -1
+        val = eval_expr(operands[idx])
+        if mnemonic == 'mov':
+            if not -0x80000000 <= val <= 0xffffffff:
+                if operands[0] == 'main':
+                    fatal('address of start label is too large: ' + hex(val))
+                else:
+                    error('expression value too large: ' + hex(val))
+            if not args.n or operands[0] == 'main':
+                if operands[0] == 'main':
+                    operands[0] = 'r29'
+                next_line = ('ldh', [operands[0], operands[0], hex(val >> 16)])
+            elif not check_int_range(val, 16):
+                error('expression value too large (do not use -n option): ' + hex(val))
+            mnemonic = 'ldl'
+            operands[1] = '{:#06x}'.format(val & 0xffff)
+        else:
+            operands[idx] = str(val) if check_int_range(val, 8) else hex(val)
+    if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
+        check_operands_n(operands, 2, 3)
+        operands[-1] = label_addr(operands[-1], addr)
+    if mnemonic == '.byte':
+        addr += len(operands)
+    elif mnemonic == '.int':
+        addr += 4 * int(operands[1], 0)
+    elif mnemonic == '.space':
+        addr += int(operands[0], 0)
     else:
-        if mnemonic in ['ld', 'st', '.int', 'mov']:
-            check_operands_n(operands, 1, 3)
-            idx = 0 if mnemonic == '.int' else -1
-            val = eval_expr(operands[idx])
-            if mnemonic == 'mov':
-                if not -0x80000000 <= val <= 0xffffffff:
-                    if operands[0] == 'main':
-                        fatal('address of start label is too large: ' + hex(val))
-                    else:
-                        error('expression value too large: ' + hex(val))
-                if not args.n or operands[0] == 'main':
-                    if operands[0] == 'main':
-                        operands[0] = 'r29'
-                    next_line = ('ldh', [operands[0], operands[0], hex(val >> 16)])
-                elif not check_int_range(val, 16):
-                    error('expression value too large (do not use -n option): ' + hex(val))
-                mnemonic = 'ldl'
-                operands[1] = '{:#06x}'.format(val & 0xffff)
-            else:
-                operands[idx] = str(val) if check_int_range(val, 8) else hex(val)
-        if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
-            check_operands_n(operands, 2, 3)
-            operands[-1] = label_addr(operands[-1], addr)
-        if mnemonic == '.int':
-            addr += 4 * (int(operands[1], 0) - 1)
-        lines3.append((mnemonic, operands, filename, pos))
-    addr += 4
+        addr += 4
+    lines3.append((mnemonic, operands, filename, pos))
 for mnemonic, operands, filename, pos in lines1:
     if mnemonic == '.global':
         check_global(operands[0])
@@ -847,8 +895,8 @@ if args.s or args.v:
             s = '{:#08x}  {:7} {}'.format(addr, mnemonic, ', '.join(operands))
             l = show_label(addr)
             if args.v:
-                b = code(mnemonic, operands)
-                comment = '# [{:#010x}]  '.format(struct.unpack('>I', b[0:4])[0])
+                b = code(mnemonic, operands).ljust(4, '\0')[0:4]
+                comment = '# [{:08x}]  '.format(struct.unpack('>I', b)[0])
                 if l:
                     comment += '(' + l + ')  '
                 if prev_pos != pos and filename:
@@ -857,9 +905,14 @@ if args.s or args.v:
             else:
                 comment = '# ' + l if l else ''
             print >> f, '{:39} {}'.format(s, comment).rstrip()
-            if mnemonic == '.int':
-                addr += 4 * (int(operands[1], 0) - 1)
-            addr += 4
+            if mnemonic == '.byte':
+                addr += len(operands)
+            elif mnemonic == '.int':
+                addr += 4 * int(operands[1], 0)
+            elif mnemonic == '.space':
+                addr += int(operands[0], 0)
+            else:
+                addr += 4
 
 def write(f, byterepr):
     if args.k:
