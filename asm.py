@@ -263,12 +263,12 @@ def on_debug(operands, tag):
     check_operands_n(operands, 1)
     return code_i(7, 'r0', 'r0', 'r0', operands[0], tag)
 
-def on_dot_int(operand):
-    success, imm = parse_int(operand[0])
+def on_dot_int(operands):
+    success, imm = parse_int(operands[0])
     if not success:
         error('expected integer literal: ' + operands[0])
     if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value too large: ' + operand)
+        error('immediate value too large: ' + operands[0])
     cnt = int(operands[1], 0)
     return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
 
