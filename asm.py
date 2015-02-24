@@ -97,12 +97,26 @@ def check_operands_n(operands, n, m=-1):
     if l > max(n, m):
         error('expected {} operands, but {} given'.format(max(n, m), l))
 
+def split_comma(s):
+    lit = esc = False
+    for i, c in enumerate(s):
+        if esc:
+            esc = False
+            continue
+        if c == '\"':
+            lit ^= True
+        if c == '\\' and lit:
+            esc = True
+        if c == ',' and not lit:
+            return [s[0:i]] + split_comma(s[i+1:])
+    return [s]
+
 def parse(line):
     line = line.strip()
     if ' ' not in line:
         return line, []
     mnemonic, rest = line.split(None, 1)
-    operands = rest.split(',')
+    operands = split_comma(rest)
     return mnemonic, map(str.strip, operands)
 
 

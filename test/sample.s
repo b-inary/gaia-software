@@ -85,8 +85,7 @@ main:
     fcmpge  r1, r2, r3
     read    r1
     write   r1
-    write   42
-    write   "Hello\n"
+    write   r1, "\"Hello, world!\"\n"
     br      label
     bz+     r1, label2
     bnz-    r1, label3
