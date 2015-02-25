@@ -410,6 +410,56 @@ def expand_alu(op, operands):
         return mov_imm('r29', imm) + [(op, [operands[0], operands[1], 'r29', '0'])]
     error('expected register or immediate value: ' + operands[2])
 
+def expand_movb(operands):
+    check_operands_n(operands, 2, 5)
+    if operands[1][0] == '[' and operands[1][-1] == ']':
+        check_operands_n(operands, 2, 3)
+        if len(operands) == 2:
+            operands.append('r27')
+        success, base, disp = parse_memaccess(operands[1])
+        if success:
+            if disp == '0':
+                addr, pre = base, []
+            else:
+                addr, pre = 'r29', expand_alu('add', ['r29', base, disp])
+        else:
+            addr, pre = 'r29', [('mov', ['r29', operands[1][1:-1]])]
+        return pre + [
+            ('and', [operands[2], addr, addr, '3']),
+            ('shl', [operands[2], operands[2], 'r0', '3']),
+            ('and', ['r29', addr, addr, '-4']),
+            ('ld', ['r29', 'r29', '0']),
+            ('shl', ['r29', 'r29', operands[2], '0']),
+            ('shr', [operands[0], 'r29', 'r0', '24'])
+        ]
+    if operands[0][0] == '[' and operands[0][-1] == ']':
+        if len(operands) == 2:
+            operands.extend(['r25', 'r26', 'r27'])
+        check_operands_n(operands, 5)
+        success, base, disp = parse_memaccess(operands[0])
+        if success:
+            if disp == '0':
+                addr, pre = base, []
+            else:
+                addr, pre = 'r29', expand_alu('add', ['r29', base, disp])
+        else:
+            addr, pre = 'r29', [('mov', ['r29', operands[0][1:-1]])]
+        return pre + [
+            ('and', [operands[2], addr, addr, '3']),
+            ('shl', [operands[2], operands[2], 'r0', '3']),
+            ('and', ['r29', addr, addr, '-4']),
+            ('ld', [operands[3], 'r29', '0']),
+            ('ldh', [operands[4], 'r0', '0xff00']),
+            ('shr', [operands[4], operands[4], operands[2], '0']),
+            ('xor', [operands[4], operands[4], 'r0', '-1']),
+            ('and', [operands[3], operands[3], operands[4], '-1']),
+            ('shl', [operands[4], operands[1], 'r0', '24']),
+            ('shr', [operands[4], operands[4], operands[2], '0']),
+            ('or', [operands[3], operands[3], operands[4], '0']),
+            ('st', [operands[3], 'r29', '0'])
+        ]
+    error('movb only supports move between register and memory')
+
 def expand_and(operands):
     check_operands_n(operands, 3, 4)
     if (len(operands) == 4):
@@ -585,6 +635,7 @@ def expand_dot_string(operands):
 macro_table = {
     'nop':      expand_nop,
     'mov':      expand_mov,
+    'movb':     expand_movb,
     'and':      expand_and,
     'neg':      expand_neg,
     'not':      expand_not,

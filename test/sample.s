@@ -69,6 +69,8 @@ main:
     mov     [label], r1
     mov     [label], 1
     mov     [label2 + 4], label3 >> 2
+    movb    r1, [r2 + 3]
+    movb    [label + 1], r2
     add     r1, r2, r3
     add     r1, r2, 3
     add     r1, r2, 345
