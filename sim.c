@@ -290,9 +290,9 @@ void exec(uint32_t inst)
 {
     int opcode = inst >> 28;
     switch (opcode) {
-        case 0:  exec_alu(inst); break;
-        case 1:  exec_fpu(inst); break;
-        case 7:  exec_debug(inst); break;
+        case  0: exec_alu(inst); break;
+        case  1: exec_fpu(inst); break;
+        case 10: exec_debug(inst); break;
         default: exec_misc(inst); break;
     }
 }

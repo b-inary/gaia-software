@@ -276,7 +276,7 @@ def on_misc3(operands, op, pred, disp_mode):
 
 def on_debug(operands, tag):
     check_operands_n(operands, 1)
-    return code_i(7, 'r0', 'r0', 'r0', operands[0], tag)
+    return code_i(10, 'r0', 'r0', 'r0', operands[0], tag)
 
 def on_dot_int(operands):
     success, imm = parse_int(operands[0])
