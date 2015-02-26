@@ -836,7 +836,7 @@ def resolve_label(lines, opt):
                 ret.append((mnemonic, [operands[0], 'r0', hex(val)], filename, pos))
             else:
                 addr += 8
-                hi, lo = (val + 0x8000) & ~0xffff, ((val + 0x8000) & 0xffff) - 0x8000
+                hi, lo = ((val + 0x8000) >> 16) & 0xffff, ((val + 0x8000) & 0xffff) - 0x8000
                 ret.append(('ldh', ['r29', 'r0', hex(hi)], filename, pos))
                 ret.append((mnemonic, [operands[0], 'r29', hex(lo)], filename, pos))
             continue
