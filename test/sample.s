@@ -80,6 +80,10 @@ main:
     and     r1, r2, 345678
     neg     r1, r2
     not     r1, r2
+    zextb   r1, r2
+    zextw   r1, r2
+    sextb   r1, r2
+    sextw   r1, r2
     cmpgt   r1, r2, r3
     cmpge   r1, r2, 3
     fcmpgt  r1, r2, r3

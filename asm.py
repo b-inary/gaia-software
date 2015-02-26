@@ -485,6 +485,25 @@ def expand_not(operands):
     check_operands_n(operands, 2)
     return [('xor', [operands[0], operands[1], 'r0', '-1'])]
 
+def expand_sextb(operands):
+    check_operands_n(operands, 2)
+    return [('shl', ['r29', operands[1], 'r0', '24']),
+            ('sar', [operands[0], 'r29', 'r0', '24'])]
+
+def expand_sextw(operands):
+    check_operands_n(operands, 2)
+    return [('shl', ['r29', operands[1], 'r0', '16']),
+            ('sar', [operands[0], 'r29', 'r0', '16'])]
+
+def expand_zextb(operands):
+    check_operands_n(operands, 2)
+    return [('shl', ['r29', operands[1], 'r0', '24']),
+            ('shr', [operands[0], 'r29', 'r0', '24'])]
+
+def expand_zextw(operands):
+    check_operands_n(operands, 2)
+    return [('ldh', [operands[0], operands[1], '0'])]
+
 def expand_cmpgt(operands):
     check_operands_n(operands, 3)
     if operands[2] in regs:
@@ -643,6 +662,10 @@ macro_table = {
     'and':      expand_and,
     'neg':      expand_neg,
     'not':      expand_not,
+    'sextb':    expand_sextb,
+    'sextw':    expand_sextw,
+    'zextb':    expand_zextb,
+    'zextw':    expand_zextw,
     'cmpgt':    expand_cmpgt,
     'cmpge':    expand_cmpge,
     'fcmpgt':   expand_fcmpgt,
@@ -934,7 +957,7 @@ for filename in args.inputs:
             if line:
                 srcs[filename][pos + 1] = line
                 lines0.append((line, filename, pos + 1))
-lines0.append(('.align 4', filename, pos + 1))
+lines0.append(('.align 4', lines0[-1][1], lines0[-1][2]))
 if args.f:
     lines0.append(('.global ' + args.f, '_end', 0))
     lines0.append((args.f + ':', '_end', 0))
