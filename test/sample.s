@@ -66,6 +66,7 @@ main:
     mov     r1, [r2 + 4]
     mov     r1, [label + 8]
     mov     [r1 - 8], r2
+    mov     [r1 + 4], 5
     mov     [label], r1
     movb    r1, [r2 + 3]
     movb    [label + 1], r2
