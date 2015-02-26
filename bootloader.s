@@ -20,9 +20,9 @@
     read    r2
     read    r3
     read    r4
-    shl     r1, r1, 24
-    shl     r2, r2, 16
-    shl     r3, r3,  8
+    shl     r2, r2,  8
+    shl     r3, r3, 16
+    shl     r4, r4, 24
     add     r1, r1, r2
     add     r3, r3, r4
     add     r1, r1, r3
@@ -40,9 +40,9 @@ load_next:
     read    r6
     read    r7
     read    r8
-    shl     r5, r5, 24
-    shl     r6, r6, 16
-    shl     r7, r7,  8
+    shl     r6, r6,  8
+    shl     r7, r7, 16
+    shl     r8, r8, 24
     add     r5, r5, r6
     add     r7, r7, r8
     add     r5, r5, r7
@@ -78,8 +78,7 @@ display_decimal:
     blt     r11, 1000, dec_lt1000
     mov     r12, 1000
     call    display_digit
-    mov     r12, 44     # ',' character
-    write   r12
+    write   r12, ","
 dec_lt1000:
     mov     r12, 100
     call    display_digit

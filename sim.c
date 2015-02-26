@@ -365,14 +365,14 @@ void load_file()
         error(strerror(errno));
 
     prog_size = 0;
-    for (int i = 0; i < 4; ++i)
-        prog_size = (prog_size << 8) + fgetc(fp);
+    for (int i = 0; i < 32; i += 8)
+        prog_size += fgetc(fp) << i;
 
     for (uint32_t i = 0; i < prog_size; ++i) {
         int c = fgetc(fp);
         if (c == EOF)
             error("load_file: reached EOF (actual size is less than header)");
-        *((uint8_t*)mem + entry_point + (i ^ 3)) = c;
+        *((uint8_t*)mem + entry_point + i) = c;
     }
 
     if (fgetc(fp) != EOF)

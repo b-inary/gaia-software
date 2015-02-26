@@ -205,21 +205,21 @@ def code_i(op, rx, ra, rb, imm, tag):
         error('expected integer literal: ' + imm)
     if not check_int_range(i, 8):
         error('immediate value too large: ' + imm)
-    c1 = (op << 4) + (x >> 1)
+    c0 = ((i & 7) << 5) + tag
+    c1 = ((b & 7) << 5) + ((i >> 3) & 31)
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
-    c3 = ((b & 7) << 5) + ((i >> 3) & 31)
-    c4 = ((i & 7) << 5) + tag
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+    c3 = (op << 4) + (x >> 1)
+    return chr(c0) + chr(c1) + chr(c2) + chr(c3)
 
 def code_f(rx, ra, rb, sign, tag):
     x = regnum(rx)
     a = regnum(ra)
     b = regnum(rb)
-    c1 = (1 << 4) + (x >> 1)
+    c0 = (sign << 5) + tag
+    c1 = ((b & 7) << 5)
     c2 = ((x & 1) << 7) + (a << 2) + (b >> 3)
-    c3 = ((b & 7) << 5)
-    c4 = (sign << 5) + tag
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+    c3 = (1 << 4) + (x >> 1)
+    return chr(c0) + chr(c1) + chr(c2) + chr(c3)
 
 def code_m(op, rx, ra, pred, disp, disp_mode):
     x = regnum(rx)
@@ -235,11 +235,11 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
         d >>= 2
     elif not -0x8000 <= d <= 0xffff:
         error('immediate value too large: ' + disp)
-    c1 = (op << 4) + (x >> 1)
+    c0 = d & 255
+    c1 = (d >> 8) & 255
     c2 = ((x & 1) << 7) + (a << 2) + pred
-    c3 = (d >> 8) & 255
-    c4 = d & 255
-    return chr(c1) + chr(c2) + chr(c3) + chr(c4)
+    c3 = (op << 4) + (x >> 1)
+    return chr(c0) + chr(c1) + chr(c2) + chr(c3)
 
 def on_alu3(operands, tag):
     check_operands_n(operands, 3)
@@ -284,7 +284,7 @@ def on_dot_int(operands):
     if not -0x80000000 <= imm <= 0xffffffff:
         error('immediate value too large: ' + operands[0])
     cnt = int(operands[1], 0)
-    return (chr(imm >> 24 & 255) + chr(imm >> 16 & 255) + chr(imm >> 8 & 255) + chr(imm & 255)) * cnt
+    return ''.join(chr(imm >> x & 255) for x in [0, 8, 16, 24]) * cnt
 
 def on_dot_byte(operand):
     success, imm = parse_int(operand)
@@ -961,7 +961,7 @@ if args.s or args.v:
             l = show_label(addr)
             if args.v:
                 b = code(mnemonic, operands).ljust(4, '\0')[0:4]
-                comment = '# [{:08x}]  '.format(struct.unpack('>I', b)[0])
+                comment = '# [{:08x}]  '.format(struct.unpack('<I', b)[0])
                 if l:
                     comment += '(' + l + ')  '
                 if prev_pos != pos and filename:
@@ -981,7 +981,7 @@ if args.s or args.v:
 
 def write(f, byterepr):
     if args.k:
-        f.write("{} => x\"{}\",\n".format(i, ''.join('{:02x}'.format(ord(x)) for x in byterepr)))
+        f.write("{} => x\"{:08x}\",\n".format(i, struct.unpack('<I', byterepr)[0]))
     elif args.a:
         fmt = """
         wait for BR; RS_RX <= '0';
@@ -1017,6 +1017,6 @@ with open(args.o, 'w') as f:
         f.write("others => (others => '0')\n")
     elif not args.c:
         f.seek(0)
-        byterepr = ''.join(chr(size >> x & 255) for x in [24, 16, 8, 0])
+        byterepr = ''.join(chr(size >> x & 255) for x in [0, 8, 16, 24])
         write(f, byterepr)
 
