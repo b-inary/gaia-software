@@ -115,10 +115,11 @@ def split_comma(s):
     return [s]
 
 def parse(line):
-    line = line.strip()
-    if ' ' not in line:
-        return line, []
-    mnemonic, rest = line.split(None, 1)
+    mnemonic, rest = line.split(None, 1) if ' ' in line else (line, '')
+    if '#' in mnemonic:
+        return mnemonic[0 : mnemonic.find('#')], []
+    if len(rest) == 0 or rest[0] == '#':
+        return mnemonic, []
     operands = split_comma(rest)
     return mnemonic, map(str.strip, operands)
 
@@ -926,8 +927,8 @@ for filename in args.inputs:
         srcs[filename] = {}
         for pos, line in enumerate(f):
             line = line.strip()
-            srcs[filename][pos + 1] = line
             if line:
+                srcs[filename][pos + 1] = line
                 lines0.append((line, filename, pos + 1))
 lines0.append(('.align 4', filename, pos + 1))
 if args.f:
