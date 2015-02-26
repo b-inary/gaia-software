@@ -87,8 +87,10 @@ def parse_memaccess(operand):
     if m and m.group(1) in regs:
         return True, m.group(1), 0
     m = re.match(r'\[\s*([+-]?\s*\w+)\s*\]$', operand)
-    if m and parse_int(m.group(1))[0]:
-        return True, 'r0', m.group(1)
+    if m:
+        success, imm = parse_int(m.group(1))
+        if success:
+            return True, 'r0', imm
     return False, 'r0', 0
 
 def check_operands_n(operands, n, m=-1):
