@@ -67,8 +67,8 @@ main:
     mov     r1, [label + 8]
     mov     [r1 - 8], r2
     mov     [label], r1
-    # movb    r1, [r2 + 3]
-    # movb    [label + 1], r2
+    movb    r1, [r2 + 3]
+    movb    [label + 1], r2
     add     r1, r2, r3
     add     r1, r2, 3
     add     r1, r2, 345

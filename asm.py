@@ -179,7 +179,9 @@ misc2_table = {
 misc3_table = {
     'ldh':       3,
     'st':        6,
+    'stb':       7,
     'ld':        8,
+    'ldb':       9,
     'bne':      13,
     'beq':      15,
 }
@@ -228,14 +230,18 @@ def code_m(op, rx, ra, pred, disp, disp_mode):
     success, d = parse_int(disp)
     if not success:
         error('expected displacement: ' + disp)
-    if disp_mode:
+    if disp_mode == 0:
+        if not -0x8000 <= d <= 0xffff:
+            error('immediate value too large: ' + disp)
+    elif disp_mode == 1:
+        if not check_int_range(d, 16):
+            error('displacement too large: ' + disp)
+    else:
         if d & 3 != 0:
             error('displacement must be a multiple of 4')
         if not check_int_range(d, 18):
-            error('displacement is too large: ' + disp)
+            error('displacement too large: ' + disp)
         d >>= 2
-    elif not -0x8000 <= d <= 0xffff:
-        error('immediate value too large: ' + disp)
     c0 = d & 255
     c1 = (d >> 8) & 255
     c2 = ((x & 1) << 7) + (a << 2) + pred
@@ -318,7 +324,8 @@ def code(mnemonic, operands):
     if fpu_mnemonic in fpu3_table:
         return on_fpu3(operands, sign_table[fpu_suffix], fpu3_table[fpu_mnemonic])
     pred = 3 if mnemonic in ['jl', 'jr', 'bne+', 'beq+'] else 0
-    disp_mode = False if mnemonic in ['ldl', 'ldh'] else True
+    disp_mode = 0 if mnemonic in ['ldl', 'ldh'] else \
+                1 if mnemonic in ['ldb', 'stb'] else 2
     if mnemonic in ['bne-', 'bne+']:
         mnemonic = 'bne'
     if mnemonic in ['beq-', 'beq+']:
@@ -423,52 +430,32 @@ def expand_alu(op, operands):
     error('expected register or immediate value: ' + operands[2])
 
 def expand_movb(operands):
-    check_operands_n(operands, 2, 5)
     if operands[1][0] == '[' and operands[1][-1] == ']':
-        check_operands_n(operands, 2, 3)
-        if len(operands) == 2:
-            operands.append('r27')
         success, base, disp = parse_memaccess(operands[1])
-        if success:
-            if disp == '0':
-                addr, pre = base, []
-            else:
-                addr, pre = 'r29', expand_alu('add', ['r29', base, disp])
-        else:
-            addr, pre = 'r29', [('mov', ['r29', operands[1][1:-1]])]
-        return pre + [
-            ('and', [operands[2], addr, addr, '3']),
-            ('shl', [operands[2], operands[2], 'r0', '3']),
-            ('and', ['r29', addr, addr, '-4']),
-            ('ld', ['r29', 'r29', '0']),
-            ('shl', ['r29', 'r29', operands[2], '0']),
-            ('shr', [operands[0], 'r29', 'r0', '24'])
+        if not success:
+            return [('ldb', [operands[0], operands[1][1:-1].strip()])]
+        if check_int_range(disp, 16):
+            return [('ldb', [operands[0], base, str(disp)])]
+        hi, lo = (disp + 0x8000) & ~0xffff, ((disp + 0x8000) & 0xffff) - 0x8000
+        if base == 'r0':
+            return mov_imm('r29', hi) + [('ldb', [operands[0], 'r29', str(lo)])]
+        return mov_imm('r29', hi) + [
+            ('add', ['r29', base, 'r29', '0']),
+            ('ldb', [operands[0], 'r29', str(lo)])
         ]
     if operands[0][0] == '[' and operands[0][-1] == ']':
-        if len(operands) == 2:
-            operands.extend(['r25', 'r26', 'r27'])
-        check_operands_n(operands, 5)
         success, base, disp = parse_memaccess(operands[0])
-        if success:
-            if disp == '0':
-                addr, pre = base, []
-            else:
-                addr, pre = 'r29', expand_alu('add', ['r29', base, disp])
-        else:
-            addr, pre = 'r29', [('mov', ['r29', operands[0][1:-1]])]
-        return pre + [
-            ('and', [operands[2], addr, addr, '3']),
-            ('shl', [operands[2], operands[2], 'r0', '3']),
-            ('and', ['r29', addr, addr, '-4']),
-            ('ld', [operands[3], 'r29', '0']),
-            ('ldh', [operands[4], 'r0', '0xff00']),
-            ('shr', [operands[4], operands[4], operands[2], '0']),
-            ('xor', [operands[4], operands[4], 'r0', '-1']),
-            ('and', [operands[3], operands[3], operands[4], '-1']),
-            ('shl', [operands[4], operands[1], 'r0', '24']),
-            ('shr', [operands[4], operands[4], operands[2], '0']),
-            ('or', [operands[3], operands[3], operands[4], '0']),
-            ('st', [operands[3], 'r29', '0'])
+        if not success:
+            return [('stb', [operands[1], operands[0][1:-1].strip()])]
+        if check_int_range(disp, 16):
+            d, p = (operands[1], []) if operands[1] in regs else ('r29', expand_mov('r29', operands[1]))
+            return p + [('stb', [d, base, str(disp)])]
+        hi, lo = (disp + 0x8000) & ~0xffff, ((disp + 0x8000) & 0xffff) - 0x8000
+        if base == 'r0':
+            return mov_imm('r29', hi) + [('stb', [operands[1], 'r29', str(lo)])]
+        return mov_imm('r29', hi) + [
+            ('add', ['r29', base, 'r29', '0']),
+            ('stb', [operands[1], 'r29', str(lo)])
         ]
     error('movb only supports move between register and memory')
 
@@ -811,7 +798,7 @@ def init_label(lines, jump_main, opt):
         else:
             if addr & 3:
                 error('instruction must be aligned on 4-byte boundaries')
-            if mnemonic == 'mov' or (mnemonic in ['ld', 'st'] and len(operands) == 2):
+            if mnemonic == 'mov' or (mnemonic in ['ld', 'ldb', 'st', 'stb'] and len(operands) == 2):
                 addr += 8
             else:
                 addr += 4
@@ -840,7 +827,7 @@ def resolve_label(lines, opt):
                 ret.append(('ldl', [operands[0], hex(val & 0xffff)], filename, pos))
                 ret.append(('ldh', [operands[0], operands[0], hex(val >> 16 & 0xffff)], filename, pos))
             continue
-        if mnemonic in ['ld', 'st'] and len(operands) == 2:
+        if mnemonic in ['ld', 'ldb', 'st', 'stb'] and len(operands) == 2:
             val = eval_expr(operands[1])
             if not -0x80000000 <= val <= 0xffffffff:
                 error('expression value too large: ' + hex(val))
@@ -849,8 +836,9 @@ def resolve_label(lines, opt):
                 ret.append((mnemonic, [operands[0], 'r0', hex(val)], filename, pos))
             else:
                 addr += 8
-                ret.append(('ldh', ['r29', 'r0', hex(val >> 16 & 0xffff)], filename, pos))
-                ret.append((mnemonic, [operands[0], 'r29', hex(val & 0xffff)], filename, pos))
+                hi, lo = (val + 0x8000) & ~0xffff, ((val + 0x8000) & 0xffff) - 0x8000
+                ret.append(('ldh', ['r29', 'r0', hex(hi)], filename, pos))
+                ret.append((mnemonic, [operands[0], 'r29', hex(lo)], filename, pos))
             continue
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)

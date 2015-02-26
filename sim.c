@@ -194,6 +194,14 @@ uint32_t load(int ra, uint32_t disp)
     }
 }
 
+uint32_t load_byte(int ra, uint32_t disp)
+{
+    uint32_t addr = to_physical(reg[ra] + disp);
+    if (addr >= mem_size)
+        error("load_byte: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
+    return *((uint8_t *)mem + addr);
+}
+
 void store(int ra, uint32_t disp, uint32_t x)
 {
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
@@ -213,6 +221,14 @@ void store(int ra, uint32_t disp, uint32_t x)
             default: error("store: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
         }
     }
+}
+
+void store_byte(int ra, uint32_t disp, uint32_t x)
+{
+    uint32_t addr = to_physical(reg[ra] + disp);
+    if (addr >= mem_size)
+        error("store_byte: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
+    *((uint8_t *)mem + addr) = x;
 }
 
 void exec_alu(uint32_t inst)
@@ -261,8 +277,14 @@ void exec_misc(uint32_t inst)
         case 6:
             store(ra, disp, reg[rx]);
             return;
+        case 7:
+            store_byte(ra, disp, reg[rx]);
+            return;
         case 8:
             reg[rx] = load(ra, disp);
+            return;
+        case 9:
+            reg[rx] = load_byte(ra, disp);
             return;
         case 11:
             reg[rx] = pc + 4;
