@@ -397,7 +397,7 @@ def expand_mov(operands):
         if not success:
             return [('st', [operands[1], operands[0][1:-1].strip()])]
         if check_int_range(disp, 18):
-            d, p = (operands[1], []) if operands[1] in regs else ('r29', expand_mov('r29', operands[1]))
+            d, p = (operands[1], []) if operands[1] in regs else ('r29', mov_imm('r29', operands[1]))
             return p + [('st', [d, base, str(disp)])]
         if base == 'r0':
             return mov_imm('r29', disp & ~0xffff) + [('st', [operands[1], 'r29', str(disp & 0xffff)])]
