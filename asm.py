@@ -663,6 +663,8 @@ macro_table = {
 
 def expand_macro(line):
     mnemonic, operands = parse(line)
+    if not mnemonic:
+        return []
     if mnemonic in macro_table:
         return macro_table[mnemonic](operands)
     if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'or', 'xor', 'cmpne', 'cmpeq', 'cmplt', 'cmple']:
