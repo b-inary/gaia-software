@@ -110,6 +110,8 @@ def split_comma(s):
             esc = True
         if c == ',' and not lit:
             return [s[0:i]] + split_comma(s[i+1:])
+        if c == '#' and not lit:
+            return [s[0:i]]
     return [s]
 
 def parse(line):
@@ -925,9 +927,6 @@ for filename in args.inputs:
         for pos, line in enumerate(f):
             line = line.strip()
             srcs[filename][pos + 1] = line
-            comment_pos = line.find('#')
-            if comment_pos != -1:
-                line = line[0 : comment_pos].rstrip()
             if line:
                 lines0.append((line, filename, pos + 1))
 lines0.append(('.align 4', filename, pos + 1))
