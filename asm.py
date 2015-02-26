@@ -957,7 +957,8 @@ for filename in args.inputs:
             if line:
                 srcs[filename][pos + 1] = line
                 lines0.append((line, filename, pos + 1))
-lines0.append(('.align 4', lines0[-1][1], lines0[-1][2]))
+if lines0:
+    lines0.append(('.align 4', lines0[-1][1], lines0[-1][2]))
 if args.f:
     lines0.append(('.global ' + args.f, '_end', 0))
     lines0.append((args.f + ':', '_end', 0))
