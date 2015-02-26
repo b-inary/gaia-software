@@ -755,7 +755,7 @@ def init_label(lines, jump_main, opt):
     ret = []
     if jump_main:
         ret = [('mov', ['r29', start_label], '', 0), ('jr', ['r29'], '', 0)]
-    addr = entry_point + (8 if opt else 12)
+    addr = entry_point + (0 if not jump_main else 8 if opt else 12)
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
             if len(operands) > 0:
