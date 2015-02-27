@@ -306,6 +306,14 @@ def on_dot_byte(operand):
         error('immediate value too large: ' + operand)
     return chr(imm & 255)
 
+def on_dot_short(operand):
+    success, imm = parse_int(operand)
+    if not success:
+        error('expected integer literal: ' + operand)
+    if not -0x8000 <= imm <= 0xffff:
+        error('immediate value too large: ' + operand)
+    return chr(imm & 255) + chr(imm >> 8 & 255)
+
 def on_dot_space(operands):
     check_operands_n(operands, 2)
     success, imm = parse_int(operands[1])
@@ -349,6 +357,8 @@ def code(mnemonic, operands):
         return on_dot_int(operands)
     if mnemonic == '.byte':
         return ''.join(on_dot_byte(operand) for operand in operands)
+    if mnemonic == '.short':
+        return ''.join(on_dot_short(operand) for operand in operands)
     if mnemonic == '.space':
         return on_dot_space(operands)
     error('unknown mnemonic \'{}\''.format(mnemonic))
@@ -818,6 +828,9 @@ def init_label(lines, jump_main, opt):
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
             add_label(operands[0], eval_expr(operands[1]))
+        elif mnemonic == '.short':
+            addr += 2 * len(operands)
+            ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.space':
             check_operands_n(operands, 2)
             success, imm = parse_int(operands[0])
@@ -881,6 +894,8 @@ def resolve_label(lines, opt):
                 error('expression value too large: ' + hex(val))
             operands[0] = str(val) if check_int_range(val, 8) else hex(val)
             addr += 4 * int(operands[1], 0)
+        elif mnemonic == '.short':
+            addr += 2 * len(operands)
         elif mnemonic == '.space':
             addr += int(operands[0], 0)
         else:
@@ -1011,6 +1026,8 @@ if args.s or args.v:
                 addr += len(operands)
             elif mnemonic == '.int':
                 addr += 4 * int(operands[1], 0)
+            elif mnemonic == '.short':
+                addr += 2 * len(operands)
             elif mnemonic == '.space':
                 addr += int(operands[0], 0)
             else:

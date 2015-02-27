@@ -4,7 +4,7 @@
 #define INTENBL ((int*) 0x80001104)
 #define HANDLER ((int*) 0x80001100)
 
-#define SERIAL ((char*) 0x80001000)
+#define SERIAL ((int*) 0x80001000)
 
 #define IRQ_TIMER    1
 #define IRQ_SERIAL   2

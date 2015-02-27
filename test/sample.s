@@ -122,6 +122,7 @@ main:
     .float  -1.2e34
     .set    label2, 0x1234
     .set    label3, label + label2 * 4
+    .short  77, 777, 7777
     .space  7
     .space  2, 123
 
