@@ -199,7 +199,7 @@ uint32_t load_byte(int ra, uint32_t disp)
     uint32_t addr = to_physical(reg[ra] + disp);
     if (addr >= mem_size)
         error("load_byte: exceeded %dMB limit: 0x%08x", mem_size >> 20, addr);
-    return *((uint8_t *)mem + addr);
+    return *((int8_t *)mem + addr);
 }
 
 void store(int ra, uint32_t disp, uint32_t x)
