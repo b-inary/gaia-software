@@ -695,7 +695,8 @@ def expand_macro(line):
         return []
     if mnemonic in macro_table:
         return macro_table[mnemonic](operands)
-    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'or', 'xor', 'cmpne', 'cmpeq', 'cmplt', 'cmple']:
+    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'or', 'xor',
+                    'cmpne', 'cmpeq', 'cmplt', 'cmple', 'cmpult', 'cmpule']:
         return expand_alu(mnemonic, operands)
     if mnemonic in ['cmpgt', 'cmpge', 'cmpugt', 'cmpuge']:
         return expand_cmpgt(mnemonic, operands)
