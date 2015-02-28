@@ -146,6 +146,8 @@ alu4_table = {
     'and':       5,
     'or':        6,
     'xor':       7,
+    'cmpult':   22,
+    'cmpule':   23,
     'cmpne':    24,
     'cmpeq':    25,
     'cmplt':    26,
@@ -514,22 +516,15 @@ def expand_zextw(operands):
     check_operands_n(operands, 2)
     return [('ldh', [operands[0], operands[1], '0'])]
 
-def expand_cmpgt(operands):
+# cmpgt, cmpge, cmpugt, cmpuge
+def expand_cmpgt(mnemonic, operands):
     check_operands_n(operands, 3)
+    m = mnemonic.replace('g', 'l')
     if operands[2] in regs:
-        return [('cmplt', [operands[0], operands[2], operands[1], '0'])]
+        return [(m, [operands[0], operands[2], operands[1], '0'])]
     success, imm = parse_int(operands[2])
     if success:
-        return mov_imm('r29', imm) + [('cmplt', [operands[0], 'r29', operands[1], '0'])]
-    error('expected register or immediate value: ' + operands[2])
-
-def expand_cmpge(operands):
-    check_operands_n(operands, 3)
-    if operands[2] in regs:
-        return [('cmple', [operands[0], operands[2], operands[1], '0'])]
-    success, imm = parse_int(operands[2])
-    if success:
-        return mov_imm('r29', imm) + [('cmple', [operands[0], 'r29', operands[1], '0'])]
+        return mov_imm('r29', imm) + [(m, [operands[0], 'r29', operands[1], '0'])]
     error('expected register or immediate value: ' + operands[2])
 
 def expand_fcmpgt(operands):
@@ -676,8 +671,6 @@ macro_table = {
     'sextw':    expand_sextw,
     'zextb':    expand_zextb,
     'zextw':    expand_zextw,
-    'cmpgt':    expand_cmpgt,
-    'cmpge':    expand_cmpge,
     'fcmpgt':   expand_fcmpgt,
     'fcmpge':   expand_fcmpge,
     'read':     expand_read,
@@ -704,6 +697,8 @@ def expand_macro(line):
         return macro_table[mnemonic](operands)
     if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'or', 'xor', 'cmpne', 'cmpeq', 'cmplt', 'cmple']:
         return expand_alu(mnemonic, operands)
+    if mnemonic in ['cmpgt', 'cmpge', 'cmpugt', 'cmpuge']:
+        return expand_cmpgt(mnemonic, operands)
     m = re.match(r'(\w+)([+-]?)$', mnemonic)
     if m:
         br_mnemonic, pred = m.groups()

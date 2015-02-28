@@ -19,6 +19,8 @@ main:
     and     r1, r2, r3, 4
     or      r1, r2, r3, 4
     xor     r1, r2, r3, 4
+    cmpult  r1, r2, r3, 4
+    cmpule  r1, r2, r3, 4
     cmpne   r1, r2, r3, 4
     cmpeq   r1, r2, r3, 4
     cmplt   r1, r2, r3, 4
@@ -84,6 +86,8 @@ main:
     zextw   r1, r2
     sextb   r1, r2
     sextw   r1, r2
+    cmpugt  r1, r2, r3
+    cmpuge  r1, r2, 3
     cmpgt   r1, r2, r3
     cmpge   r1, r2, 3
     fcmpgt  r1, r2, r3

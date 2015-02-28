@@ -94,6 +94,8 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case  5: return reg[ra] & reg[rb] & lit;
         case  6: return reg[ra] | reg[rb] | lit;
         case  7: return reg[ra] ^ reg[rb] ^ lit;
+        case 22: return reg[ra] <  reg[rb] + lit;
+        case 23: return reg[ra] <= reg[rb] + lit;
         case 24: return reg[ra] != reg[rb] + lit;
         case 25: return reg[ra] == reg[rb] + lit;
         case 26: return (int32_t)reg[ra] <  (int32_t)(reg[rb] + lit);
