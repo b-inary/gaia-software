@@ -9,6 +9,7 @@ extern uint32_t reg[32];
 extern uint32_t *mem;
 extern uint32_t pc;
 uint32_t to_physical(uint32_t);
+uint32_t load(int ra, uint32_t disp);
 void print_env(int show_vpc);
 
 int debug_enabled;
@@ -31,7 +32,13 @@ static int is_indebug = 0;
 void print_disasm(FILE*, uint32_t);
 void dump_e_i();
 void update_e_i(uint32_t, uint32_t);
+int is_break_disabled(int);
+void disable_break(int);
+void enable_break(int);
+void disable_break_all();
+void enable_break_all();
 
+int break_disabled[8]; 
 
 void exec_debug(uint32_t inst)
 {
@@ -43,6 +50,8 @@ void exec_debug(uint32_t inst)
   lit = (inst >> 5) & 255;
   switch (tag) {
     case OP_BREAK:
+      if (is_break_disabled(lit))
+        break;
       fprintf(stderr, "\x1b[1;31mbreak point %d:\x1b[0;39m\n", lit);
       print_env(1);
       is_indebug = 1;
@@ -64,7 +73,7 @@ void do_interactive_loop()
 {
   char cmd[32];
 
-  fprintf(stderr, "help: c, n, stat, trace, mem and list commands are available.\n");
+  fprintf(stderr, "help: c, n, stat, trace, mem, list, disable and enable commands are available.\n");
   for (;;) {
     fprintf(stderr, "> ");
     if (fgets(cmd, sizeof(cmd), stdin) == NULL)
@@ -90,12 +99,13 @@ void do_interactive_loop()
 
       if ((argc = sscanf(cmd, "mem %x %d", &addr, &count)) < 1) {
         fprintf(stderr, "\x1b[1;31merror. mem command usage: mem 0xaddr [count]\x1b[0;39m\n");
-      } else {
-        if (argc < 2)
-          count = 1;
-        for (i = 0; i < count; i++)
-          fprintf(stderr, "0x%08x: 0x%08x\n", addr + i * 4, mem[to_physical(addr + i * 4) >> 2]);
+        continue;
       }
+      if (argc < 2)
+        count = 1;
+      for (i = 0; i < count; i++)
+        fprintf(stderr, "0x%08x: 0x%08x\n", addr + i * 4, load(0, (addr + i * 4) >> 2));
+
     } else if (strncmp("list", cmd, 4) == 0) {
       // print the next N instructions
       int count, argc;
@@ -108,6 +118,35 @@ void do_interactive_loop()
         fprintf(stderr, "0x%08x: ", pc + i * 4);
         print_disasm(stderr, mem[to_physical(pc + i * 4) >> 2]);
       }
+
+    } else if (strncmp("disable", cmd, 7) == 0) {
+      // Disable Nth break point
+      int num;
+
+      if (sscanf(cmd, "disable %d", &num) >= 1) {
+        fprintf(stderr, "\x1b[1;31mbreak point %d disabled.\x1b[0;39m\n", num);
+        disable_break(num);
+      } else if(sscanf(cmd, "disable all") != EOF) {
+        fprintf(stderr, "\x1b[1;31mall break point disabled.\x1b[0;39m\n");
+        disable_break_all();
+      } else {
+        fprintf(stderr, "\x1b[1;31merror. disable command usage: disable [break point number] OR disable all\x1b[0;39m\n");
+      }
+
+    } else if (strncmp("enable", cmd, 6) == 0) {
+      // Enable Nth break point
+      int num;
+
+      if (sscanf(cmd, "enable %d", &num) >= 1) {
+        fprintf(stderr, "\x1b[1;31mbreak point %d enabled.\x1b[0;39m\n", num);
+        enable_break(num);
+      } else if(sscanf(cmd, "enable all") != EOF) {
+        fprintf(stderr, "\x1b[1;31mall break point enabled.\x1b[0;39m\n");
+        enable_break_all();
+      } else {
+        fprintf(stderr, "\x1b[1;31merror. enable command usage: enable [break point number] OR enable all\x1b[0;39m\n");
+      }
+
     }
     else {
       fprintf(stderr, "unknown command %s\n", cmd);
@@ -135,6 +174,33 @@ void debug_hook()
 
     tcsetattr(fileno(stdin), TCSANOW, &ttystate);
   }
+}
+
+inline int is_break_disabled(int num)
+{
+  return break_disabled[num / 32] & (1 << (num % 32));
+}
+
+inline void disable_break(int num)
+{
+  break_disabled[num / 32] |= (1 << (num % 32));
+}
+
+inline void disable_break_all()
+{
+  for (int i = 0; i < 8; i++)
+    break_disabled[i] = -1;
+}
+
+inline void enable_break(int num)
+{
+  break_disabled[num / 32] &= ~(1 << (num % 32));
+}
+
+inline void enable_break_all()
+{
+  for (int i = 0; i < 8; i++)
+    break_disabled[i] = 0;
 }
 
 // 
