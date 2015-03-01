@@ -207,6 +207,7 @@ uint32_t load_byte(int ra, uint32_t disp)
 void store(int ra, uint32_t disp, uint32_t x)
 {
     uint32_t addr = to_physical(reg[ra] + (disp << 2));
+
     if (addr & 3)
         error("store: address must be a multiple of 4: 0x%08x", addr);
     if (addr < mem_size) {
@@ -274,7 +275,6 @@ void exec_misc(uint32_t inst)
         case 5:
             pc = epc - 4;
             intr_enabled = 1;
-            irq_bits &= ~(1 << irq_num);
             return;
         case 6:
             store(ra, disp, reg[rx]);
@@ -346,6 +346,7 @@ void interrupt()
         epc = pc + 4; // GAIA cpus store interrupted address + 4.
         irq_num = __builtin_ctz(irq_bits); // IRQ number
         pc = intr_addr;
+        irq_bits &= ~(1 << irq_num); // auto EOI
     }
 }
 
