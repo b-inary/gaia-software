@@ -65,13 +65,26 @@ main:
     mov     r1, 1.0
     mov     r1, 2.3
     mov     r1, label + label2 * 3
+    mov     r1, label * 300
     mov     r1, [r2 + 4]
+    mov     r1, [0x12345678]
+    mov     r1, [r2 + 0x76543210]
     mov     r1, [label + 8]
+    mov     r1, [label + 600000]
     mov     [r1 - 8], r2
     mov     [r1 + 4], 5
-    mov     [label], r1
+    mov     [0x12345678], r2
+    mov     [r1 + 0x76543210], r2
+    mov     [label + 8], r2
+    mov     [label + 800000], r2
     movb    r1, [r2 + 3]
+    movb    r1, [r2 + 34567]
+    movb    r1, [label + 1]
+    movb    r1, [label + 123456]
+    movb    [r1 + 2], r3
+    movb    [r1 + 234567], r8
     movb    [label + 1], r2
+    movb    [label + 54321], r0
     add     r1, r2, r3
     add     r1, r2, 3
     add     r1, r2, 345
@@ -109,8 +122,9 @@ main:
     push    r1
     push    23
     pop     r1
-    call    label
     call    r1
+    call    label
+    call    label * 100
     ret
     enter
     enter   16

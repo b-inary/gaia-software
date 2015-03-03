@@ -400,28 +400,22 @@ def expand_mov(operands):
     if operands[1][0] == '[' and operands[1][-1] == ']':
         success, base, disp = parse_memaccess(operands[1])
         if not success:
-            return [('ld', [operands[0], operands[1][1:-1].strip()])]
+            return [('ld2', [operands[0], operands[1][1:-1].strip()])]
         if check_int_range(disp, 18):
             return [('ld', [operands[0], base, str(disp)])]
-        if base == 'r0':
-            return mov_imm('r29', disp & ~0xffff) + [('ld', [operands[0], 'r29', str(disp & 0xffff)])]
-        return mov_imm('r29', disp & ~0xffff) + [
-            ('add', ['r29', base, 'r29', '0']),
-            ('ld', [operands[0], 'r29', str(disp & 0xffff)])
-        ]
+        return [('ldh', ['r29', 'r0', hex(disp >> 16 & 0xffff)])] + \
+              ([('add', ['r29', base, 'r29', '0'])] if base != 'r0' else []) + \
+               [('ld', [operands[0], 'r29', hex(disp & 0xffff)])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
         success, base, disp = parse_memaccess(operands[0])
         if not success:
-            return [('st', [operands[1], operands[0][1:-1].strip()])]
+            return [('st2', [operands[1], operands[0][1:-1].strip()])]
         if check_int_range(disp, 18):
             d, p = (operands[1], []) if operands[1] in regs else ('r29', expand_mov(['r29', operands[1]]))
             return p + [('st', [d, base, str(disp)])]
-        if base == 'r0':
-            return mov_imm('r29', disp & ~0xffff) + [('st', [operands[1], 'r29', str(disp & 0xffff)])]
-        return mov_imm('r29', disp & ~0xffff) + [
-            ('add', ['r29', base, 'r29', '0']),
-            ('st', [operands[1], 'r29', str(disp & 0xffff)])
-        ]
+        return [('ldh', ['r29', 'r0', hex(disp >> 16 & 0xffff)])] + \
+              ([('add', ['r29', base, 'r29', '0'])] if base != 'r0' else []) + \
+               [('st', [operands[1], 'r29', hex(disp & 0xffff)])]
     success, imm = parse_int(operands[1])
     if success:
         return mov_imm(operands[0], imm)
@@ -450,30 +444,22 @@ def expand_movb(operands):
     if operands[1][0] == '[' and operands[1][-1] == ']':
         success, base, disp = parse_memaccess(operands[1])
         if not success:
-            return [('ldb', [operands[0], operands[1][1:-1].strip()])]
+            return [('ldb2', [operands[0], operands[1][1:-1].strip()])]
         if check_int_range(disp, 16):
             return [('ldb', [operands[0], base, str(disp)])]
-        hi, lo = (disp + 0x8000) & ~0xffff, ((disp + 0x8000) & 0xffff) - 0x8000
-        if base == 'r0':
-            return mov_imm('r29', hi) + [('ldb', [operands[0], 'r29', str(lo)])]
-        return mov_imm('r29', hi) + [
-            ('add', ['r29', base, 'r29', '0']),
-            ('ldb', [operands[0], 'r29', str(lo)])
-        ]
+        return [('ldh', ['r29', 'r0', hex((disp + 0x8000) >> 16 & 0xffff)])] + \
+              ([('add', ['r29', base, 'r29', '0'])] if base != 'r0' else []) + \
+               [('ldb', [operands[0], 'r29', hex(((disp + 0x8000) & 0xffff) - 0x8000)])]
     if operands[0][0] == '[' and operands[0][-1] == ']':
         success, base, disp = parse_memaccess(operands[0])
         if not success:
-            return [('stb', [operands[1], operands[0][1:-1].strip()])]
+            return [('stb2', [operands[1], operands[0][1:-1].strip()])]
         if check_int_range(disp, 16):
             d, p = (operands[1], []) if operands[1] in regs else ('r29', expand_mov('r29', operands[1]))
             return p + [('stb', [d, base, str(disp)])]
-        hi, lo = (disp + 0x8000) & ~0xffff, ((disp + 0x8000) & 0xffff) - 0x8000
-        if base == 'r0':
-            return mov_imm('r29', hi) + [('stb', [operands[1], 'r29', str(lo)])]
-        return mov_imm('r29', hi) + [
-            ('add', ['r29', base, 'r29', '0']),
-            ('stb', [operands[1], 'r29', str(lo)])
-        ]
+        return [('ldh', ['r29', 'r0', hex((disp + 0x8000) >> 16 & 0xffff)])] + \
+              ([('add', ['r29', base, 'r29', '0'])] if base != 'r0' else []) + \
+               [('stb', [operands[1], 'r29', hex(((disp + 0x8000) & 0xffff) - 0x8000)])]
     error('movb only supports move between register and memory')
 
 def expand_and(operands):
@@ -602,17 +588,16 @@ def expand_pop(operands):
 
 def expand_call(operands):
     check_operands_n(operands, 1)
-    pre  = [('st', ['rbp', 'rsp', '-4']),
-            ('sub', ['rsp', 'rsp', 'r0', '4']),
-            ('add', ['rbp', 'rsp', 'r0', '0'])]
-    post = [('add', ['rsp', 'rbp', 'r0', '4']),
-            ('ld', ['rbp', 'rsp', '-4'])]
     if operands[0] in regs:
-        jump = [('jl', ['r28', '0']),
+        return [('st', ['rbp', 'rsp', '-4']),
+                ('sub', ['rsp', 'rsp', 'r0', '4']),
+                ('add', ['rbp', 'rsp', 'r0', '0']),
+                ('jl', ['r28', '0']),
                 ('add', ['r28', 'r28', 'r0', '8']),
-                ('jr', operands)]
-        return pre + jump + post
-    return pre + [('jl', ['r28', operands[0]])] + post
+                ('jr', operands),
+                ('add', ['rsp', 'rbp', 'r0', '4']),
+                ('ld', ['rbp', 'rsp', '-4'])]
+    return [('call', operands)]
 
 def expand_ret(operands):
     check_operands_n(operands, 0)
@@ -726,6 +711,17 @@ library = []
 entry_point = 0x2000
 start_label = 'main'
 
+ofs_table = {
+    'mov':       8,
+    'ld2':       8,
+    'ldb2':      8,
+    'st2':       8,
+    'stb2':      8,
+    'call':     40,
+    'call6':    24,
+    'call9':    36,
+}
+
 def add_label(label, i):
     if label in regs:
         error('\'{}\' is register name'.format(label))
@@ -767,7 +763,7 @@ def label_addr(label, cur=-1):
             error(msg)
     dic[decl[0]][2] = True
     offset = cur + 4 if cur >= 0 else 0
-    return str(dic[decl[0]][0] - offset)
+    return hex(dic[decl[0]][0] - offset)
 
 def eval_expr(expr):
     r = re.compile(r'[\w.$!?]+')
@@ -784,15 +780,25 @@ def eval_expr(expr):
     except Exception:
         error('eval error: ' + expr)
 
-def init_label(lines, jump_main, opt):
+def calc_ofs(mnemonic, operands):
+    if mnemonic[-1] == ':' or mnemonic in ['.global', '.set']:
+        return 0
+    if mnemonic == '.byte':
+        return len(operands)
+    if mnemonic == '.int':
+        return 4 * int(operands[1], 0)
+    if mnemonic == '.short':
+        return 2 * len(operands)
+    if mnemonic == '.space':
+        return int(operands[0], 0)
+    return ofs_table.get(mnemonic, 4)
+
+def init_label_first(lines):
     global labels, rev_labels, filename, pos
     labels = {}
     rev_labels = {}
-    ret = []
-    if jump_main:
-        ret = [('mov', ['r29', start_label], '', 0), ('jr', ['r29'], '', 0)]
-    addr = entry_point + (0 if not jump_main else 8 if opt else 12)
-    for mnemonic, operands, filename, pos in lines:
+    addr = entry_point
+    for i, (mnemonic, operands, filename, pos) in enumerate(lines):
         if mnemonic[-1] == ':':
             if len(operands) > 0:
                 error('label declaration must be followed by new line')
@@ -804,13 +810,11 @@ def init_label(lines, jump_main, opt):
                 error('expected integer literal: ' + operands[0])
             if imm < 4 or (imm & (imm - 1)) > 0:
                 error('alignment must be a power of 2 which is not less than 4')
-            padding = imm - (addr & (imm - 1));
-            if padding < imm:
-                addr += padding
-                ret.append(('.space', [str(padding), '0'], filename, pos))
+            padding = ((addr + imm - 1) & ~(imm - 1)) - addr;
+            addr += padding
+            lines[i] = ('.space', [str(padding), '0'], filename, pos)
         elif mnemonic == '.byte':
             addr += len(operands)
-            ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.global':
             check_operands_n(operands, 1)
             add_global(operands[0])
@@ -820,83 +824,142 @@ def init_label(lines, jump_main, opt):
             if not success:
                 error('expected integer literal: ' + operands[1])
             addr += 4 * imm
-            ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
             add_label(operands[0], eval_expr(operands[1]))
         elif mnemonic == '.short':
             addr += 2 * len(operands)
-            ret.append((mnemonic, operands, filename, pos))
         elif mnemonic == '.space':
             check_operands_n(operands, 2)
             success, imm = parse_int(operands[0])
             if not success:
                 error('expected integer literal: ' + operands[0])
             addr += imm
-            ret.append((mnemonic, operands, filename, pos))
         else:
             if addr & 3:
                 error('instruction must be aligned on 4-byte boundaries')
-            if mnemonic == 'mov' or (mnemonic in ['ld', 'ldb', 'st', 'stb'] and len(operands) == 2):
-                addr += 8
-            else:
-                addr += 4
-            ret.append((mnemonic, operands, filename, pos))
-    if addr - entry_point > 0x400000:
-        fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
-    return ret
+            addr += ofs_table.get(mnemonic, 4)
 
-def resolve_label(lines, opt):
+def init_label(lines):
+    global labels, rev_labels, filename, pos
+    labels = {}
+    rev_labels = {}
+    addr = entry_point
+    for mnemonic, operands, filename, pos in lines:
+        if mnemonic[-1] == ':':
+            add_label(mnemonic[:-1], addr)
+        elif mnemonic == '.global':
+            add_global(operands[0])
+        elif mnemonic == '.set':
+            add_label(operands[0], eval_expr(operands[1]))
+        else:
+            addr += calc_ofs(mnemonic, operands)
+
+def optimize(lines):
+    global filename, pos
+    eff = 0
+    addr = entry_point
+    for i, (mnemonic, operands, filename, pos) in enumerate(lines):
+        if mnemonic == 'mov':
+            addr += 8
+            if check_int_range(eval_expr(operands[1]), 16):
+                eff += 4
+                lines[i] = ('mov1', operands, filename, pos)
+        elif mnemonic in ['ld2', 'st2']:
+            addr += 8
+            if check_int_range(eval_expr(operands[1]), 18):
+                eff += 4
+                lines[i] = (mnemonic[:2] + '1', operands, filename, pos)
+        elif mnemonic in ['ldb2', 'stb2']:
+            addr += 8
+            if check_int_range(eval_expr(operands[1]), 16):
+                eff += 4
+                lines[i] = (mnemonic[:3] + '1', operands, filename, pos)
+        elif mnemonic == 'call':
+            addr += 40
+            val = eval_expr(operands[0])
+            if check_int_range(val - addr + 8, 18):
+                eff += 16
+                lines[i] = ('call6', operands, filename, pos)
+            elif check_int_range(val, 16):
+                eff += 4
+                lines[i] = ('call9', operands, filename, pos)
+        elif mnemonic == 'call9':
+            addr += 36
+            if check_int_range(eval_expr(operands[0]) - addr + 8, 18):
+                eff += 12
+                lines[i] = ('call6', operands, filename, pos)
+        else:
+            addr += calc_ofs(mnemonic, operands)
+    return eff > 0
+
+def resolve_label(lines):
     global filename, pos
     ret = []
     addr = entry_point
     for mnemonic, operands, filename, pos in lines:
+        if mnemonic[-1] == ':' or mnemonic in ['.global', '.set']:
+            continue
+        if mnemonic == 'mov1':
+            addr += 4
+            ret.append(('ldl', [operands[0], hex(eval_expr(operands[1]))], filename, pos))
+            continue
         if mnemonic == 'mov':
+            addr += 8
             val = eval_expr(operands[1])
             if not -0x80000000 <= val <= 0xffffffff:
                 if not filename:
                     fatal('address of start label is too large: ' + hex(val))
                 else:
                     error('expression value too large: ' + hex(val))
-            if opt:
-                addr += 4
-                ret.append(('ldl', [operands[0], hex(val)], filename, pos))
-            else:
-                addr += 8
-                ret.append(('ldl', [operands[0], hex(val & 0xffff)], filename, pos))
-                ret.append(('ldh', [operands[0], operands[0], hex(val >> 16 & 0xffff)], filename, pos))
+            ret.append(('ldl', [operands[0], hex(val & 0xffff)], filename, pos))
+            ret.append(('ldh', [operands[0], operands[0], hex(val >> 16 & 0xffff)], filename, pos))
             continue
-        if mnemonic in ['ld', 'ldb', 'st', 'stb'] and len(operands) == 2:
+        if mnemonic in ['ld1', 'ldb1', 'st1', 'stb1']:
+            addr += 4
+            ret.append((mnemonic[:-1], [operands[0], 'r0', hex(eval_expr(operands[1]))], filename, pos))
+            continue
+        if mnemonic in ['ld2', 'ldb2', 'st2', 'stb2']:
+            addr += 8
             val = eval_expr(operands[1])
             if not -0x80000000 <= val <= 0xffffffff:
                 error('expression value too large: ' + hex(val))
-            if opt:
-                addr += 4
-                ret.append((mnemonic, [operands[0], 'r0', hex(val)], filename, pos))
+            hi, lo = (val + 0x8000) >> 16 & 0xffff, ((val + 0x8000) & 0xffff) - 0x8000
+            ret.append(('ldh', ['r29', 'r0', hex(hi)], filename, pos))
+            ret.append((mnemonic[:-1], [operands[0], 'r29', hex(lo)], filename, pos))
+            continue
+        if mnemonic in ['call', 'call6', 'call9']:
+            addr += ofs_table[mnemonic]
+            val = eval_expr(operands[0])
+            if not -0x80000000 <= val <= 0xffffffff:
+                error('expression value too large: ' + hex(val))
+            pre = [('st', ['rbp', 'rsp', '-4']),
+                   ('sub', ['rsp', 'rsp', 'r0', '4']),
+                   ('add', ['rbp', 'rsp', 'r0', '0'])]
+            if mnemonic == 'call6':
+                mid = [('jl', ['r28', hex(val - addr + 8)])]
             else:
-                addr += 8
-                hi, lo = ((val + 0x8000) >> 16) & 0xffff, ((val + 0x8000) & 0xffff) - 0x8000
-                ret.append(('ldh', ['r29', 'r0', hex(hi)], filename, pos))
-                ret.append((mnemonic, [operands[0], 'r29', hex(lo)], filename, pos))
+                if mnemonic == 'call9':
+                    mid = [('ldl', ['r29', hex(val)])]
+                else:
+                    mid = [('ldl', ['r29', hex(val & 0xffff)]),
+                           ('ldh', ['r29', 'r29', hex(val >> 16 & 0xffff)])]
+                mid += [('jl', ['r28', '0']), ('add', ['r28', 'r28', 'r0', '8']), ('jr', ['r29'])]
+            post = [('add', ['rsp', 'rbp', 'r0', '4']), ('ld', ['rbp', 'rsp', '-4'])]
+            ret.extend(map(lambda (x, y): (x, y, filename, pos), pre + mid + post))
             continue
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
             operands[-1] = label_addr(operands[-1], addr)
-        if mnemonic == '.byte':
-            addr += len(operands)
-        elif mnemonic == '.int':
+        if mnemonic == '.int':
             val = eval_expr(operands[0])
             if not -0x80000000 <= val <= 0xffffffff:
                 error('expression value too large: ' + hex(val))
             operands[0] = str(val) if check_int_range(val, 8) else hex(val)
-            addr += 4 * int(operands[1], 0)
-        elif mnemonic == '.short':
-            addr += 2 * len(operands)
-        elif mnemonic == '.space':
-            addr += int(operands[0], 0)
-        else:
-            addr += 4
+        addr += calc_ofs(mnemonic, operands)
         ret.append((mnemonic, operands, filename, pos))
+    if addr - entry_point > 0x400000:
+        fatal('program size exceeds 4MB limit ({:,} bytes)'.format(addr - entry_point))
     return ret
 
 def check_global(label):
@@ -928,9 +991,10 @@ argparser.add_argument('-k', help='output as array of std_logic_vector format', 
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>', action='append')
 argparser.add_argument('-n', help='expand mov expression macro to 1 operation', action='store_true')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
+argparser.add_argument('-O', help='set optimization level', metavar='<integer>', default=1, type=int)
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
-argparser.add_argument('-start', '-t', help='start execution from <label>', metavar='<label>')
+argparser.add_argument('-t', '-start', help='start execution from <label>', metavar='<label>')
 argparser.add_argument('-v', help='output more detail assembly than -s', action='store_true')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
 argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
@@ -938,9 +1002,6 @@ args = argparser.parse_args()
 if args.inputs == []:
     argparser.print_help(sys.stderr)
     sys.exit(1)
-if args.l:
-    library = map(os.path.relpath, args.l)
-    args.inputs = library + args.inputs
 if args.e:
     success, entry_point = parse_int(args.e)
     if not success:
@@ -952,8 +1013,11 @@ if args.e:
     if entry_point < 0:
         argparser.print_usage(sys.stderr)
         fatal('argument -e: entry address must be zero or positive')
-if args.start:
-    start_label = args.start
+if args.l:
+    library = map(os.path.relpath, args.l)
+    args.inputs = library + args.inputs
+if args.t:
+    start_label = args.t
 
 # 0. preprocess
 lines0 = []
@@ -976,6 +1040,8 @@ if args.f:
 
 # 1. macro expansion
 lines1 = []
+if not args.r:
+    lines1 = [('mov', ['r29', start_label], '', 0), ('jr', ['r29'], '', 0)]
 for line, filename, pos in lines0:
     lines = expand_macro(line)
     lines1.extend(map(lambda (x, y): (x, y, filename, pos), lines))
@@ -987,8 +1053,11 @@ if args.Wr29:
             warning('r29 is used', True)
 
 # 2. label resolution (by 2-pass algorithm)
-lines2 = init_label(lines1, not args.r, args.n)
-lines3 = resolve_label(lines2, args.n)
+init_label_first(lines1)
+while args.O > 0 and optimize(lines1):
+    args.O -= 1
+    init_label(lines1)
+lines2 = resolve_label(lines1)
 for mnemonic, operands, filename, pos in lines1:
     if mnemonic == '.global':
         check_global(operands[0])
@@ -1001,7 +1070,7 @@ if args.s or args.v:
         addr = entry_point
         prev_pos = -1
         prev_file = ''
-        for mnemonic, operands, filename, pos in lines3:
+        for mnemonic, operands, filename, pos in lines2:
             if prev_file != filename:
                 print >> f, '\n# file: ' + filename
                 prev_file = filename
@@ -1018,16 +1087,7 @@ if args.s or args.v:
             else:
                 comment = '# ' + l if l else ''
             print >> f, '{:39} {}'.format(s, comment).rstrip()
-            if mnemonic == '.byte':
-                addr += len(operands)
-            elif mnemonic == '.int':
-                addr += 4 * int(operands[1], 0)
-            elif mnemonic == '.short':
-                addr += 2 * len(operands)
-            elif mnemonic == '.space':
-                addr += int(operands[0], 0)
-            else:
-                addr += 4
+            addr += calc_ofs(mnemonic, operands)
 
 def write(f, byterepr):
     if args.k:
@@ -1059,7 +1119,7 @@ with open(args.o, 'w') as f:
     size = 0
     if not (args.c or args.k):
         write(f, 'size')
-    for i, (mnemonic, operands, filename, pos) in enumerate(lines3):
+    for i, (mnemonic, operands, filename, pos) in enumerate(lines2):
         byterepr = code(mnemonic, operands)
         write(f, byterepr)
         size += len(byterepr)
