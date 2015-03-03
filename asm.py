@@ -798,7 +798,7 @@ def init_label_first(lines):
     labels = {}
     rev_labels = {}
     addr = entry_point
-    for i, (mnemonic, operands, filename, pos) in enumerate(lines):
+    for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
             if len(operands) > 0:
                 error('label declaration must be followed by new line')
@@ -810,9 +810,7 @@ def init_label_first(lines):
                 error('expected integer literal: ' + operands[0])
             if imm < 4 or (imm & (imm - 1)) > 0:
                 error('alignment must be a power of 2 which is not less than 4')
-            padding = ((addr + imm - 1) & ~(imm - 1)) - addr;
-            addr += padding
-            lines[i] = ('.space', [str(padding), '0'], filename, pos)
+            addr += ((addr + imm - 1) & ~(imm - 1)) - addr
         elif mnemonic == '.byte':
             addr += len(operands)
         elif mnemonic == '.global':
@@ -848,6 +846,9 @@ def init_label(lines):
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
             add_label(mnemonic[:-1], addr)
+        elif mnemonic == '.align':
+            align = int(operands[0], 0)
+            addr += ((addr + align - 1) & ~(align - 1)) - addr
         elif mnemonic == '.global':
             add_global(operands[0])
         elif mnemonic == '.set':
@@ -889,6 +890,9 @@ def optimize(lines):
             if check_int_range(eval_expr(operands[0]) - addr + 8, 18):
                 eff += 12
                 lines[i] = ('call6', operands, filename, pos)
+        elif mnemonic == '.align':
+            align = int(operands[0], 0)
+            addr += ((addr + align - 1) & ~(align - 1)) - addr
         else:
             addr += calc_ofs(mnemonic, operands)
     return eff > 0
@@ -947,6 +951,13 @@ def resolve_label(lines):
                 mid += [('jl', ['r28', '0']), ('add', ['r28', 'r28', 'r0', '8']), ('jr', ['r29'])]
             post = [('add', ['rsp', 'rbp', 'r0', '4']), ('ld', ['rbp', 'rsp', '-4'])]
             ret.extend(map(lambda (x, y): (x, y, filename, pos), pre + mid + post))
+            continue
+        if mnemonic == '.align':
+            align = int(operands[0], 0)
+            padding = ((addr + align - 1) & ~(align - 1)) - addr
+            if padding:
+                addr += padding
+                ret.append(('.space', [str(padding), '0'],filename, pos))
             continue
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
