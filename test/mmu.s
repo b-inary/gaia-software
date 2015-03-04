@@ -10,7 +10,6 @@ pte3:
     .space  4096
 data:
     .int    65
-    .int    10
 
 .align 4096
 .global main
@@ -39,6 +38,7 @@ main:
     mov     r2, 0x80000000
     mov     [r2 + 0x1204], r1   # Register the address of PDE to the system memory
     mov     [r2 + 0x1200], 1    # Enable virtual memory
+.space 40
     mov     r1, 0x12321000      # store the virtual address of output
     jr      r1
 
@@ -46,6 +46,7 @@ main:
 output:
     mov     r1, 0x12345000
     mov     r2, [r1]            # Read from 0x12345000, 0b0001001000(72) pde, 0b1101000101(837) pte
+    mov     [r1 + 4], 10
     mov     r3, [r1 + 4]
     write   r2                  # Output "A\n"
     write   r3
