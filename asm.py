@@ -780,9 +780,12 @@ def eval_expr(expr):
     except Exception:
         error('eval error: ' + expr)
 
-def calc_ofs(mnemonic, operands):
+def calc_ofs(mnemonic, operands, addr=0):
     if mnemonic[-1] == ':' or mnemonic in ['.global', '.set']:
         return 0
+    if mnemonic == '.align':
+        align = int(operands[0], 0)
+        return ((addr + align - 1) & ~(align - 1)) - addr
     if mnemonic == '.byte':
         return len(operands)
     if mnemonic == '.int':
@@ -846,15 +849,12 @@ def init_label(lines):
     for mnemonic, operands, filename, pos in lines:
         if mnemonic[-1] == ':':
             add_label(mnemonic[:-1], addr)
-        elif mnemonic == '.align':
-            align = int(operands[0], 0)
-            addr += ((addr + align - 1) & ~(align - 1)) - addr
         elif mnemonic == '.global':
             add_global(operands[0])
         elif mnemonic == '.set':
             add_label(operands[0], eval_expr(operands[1]))
         else:
-            addr += calc_ofs(mnemonic, operands)
+            addr += calc_ofs(mnemonic, operands, addr)
 
 def optimize(lines):
     global filename, pos
@@ -876,25 +876,17 @@ def optimize(lines):
             if check_int_range(eval_expr(operands[1]), 16):
                 eff += 4
                 lines[i] = (mnemonic[:3] + '1', operands, filename, pos)
-        elif mnemonic == 'call':
-            addr += 40
+        elif mnemonic in ['call', 'call9']:
             val = eval_expr(operands[0])
-            if check_int_range(val - addr + 8, 18):
-                eff += 16
+            if check_int_range(val - addr - 16 + (eff if val > addr else -eff), 18):
+                eff += ofs_table[mnemonic] - 24
                 lines[i] = ('call6', operands, filename, pos)
-            elif check_int_range(val, 16):
+            elif mnemonic == 'call' and check_int_range(val, 16):
                 eff += 4
                 lines[i] = ('call9', operands, filename, pos)
-        elif mnemonic == 'call9':
-            addr += 36
-            if check_int_range(eval_expr(operands[0]) - addr + 8, 18):
-                eff += 12
-                lines[i] = ('call6', operands, filename, pos)
-        elif mnemonic == '.align':
-            align = int(operands[0], 0)
-            addr += ((addr + align - 1) & ~(align - 1)) - addr
+            addr += ofs_table[mnemonic]
         else:
-            addr += calc_ofs(mnemonic, operands)
+            addr += calc_ofs(mnemonic, operands, addr)
     return eff > 0
 
 def resolve_label(lines):
@@ -1004,8 +996,9 @@ argparser.add_argument('-o', help='set output file to <file>', metavar='<file>',
 argparser.add_argument('-O', help='set optimization level', metavar='<integer>', default=0, type=int)
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
-argparser.add_argument('-t', '-start', help='start execution from <label>', metavar='<label>')
-argparser.add_argument('-v', help='output more detail assembly than -s', action='store_true')
+argparser.add_argument('-start', help='same as -t (deprecated)', metavar='<label>', dest='t')
+argparser.add_argument('-t', help='start execution from <label>', metavar='<label>')
+argparser.add_argument('-v', help='output more detailed assembly than -s', action='store_true')
 argparser.add_argument('-Wno-unused-label', help='disable unused label warning', action='store_true')
 argparser.add_argument('-Wr29', help='enable use of r29 warning', action='store_true')
 args = argparser.parse_args()
