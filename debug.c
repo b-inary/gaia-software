@@ -20,9 +20,6 @@ void init_term();
 void restore_term();
 void error(char*, ...);
 
-// disasm
-void print_ins(uint32_t);
-
 //for debug func
 static int is_indebug = 0;
 void print_disasm(FILE*, uint32_t);
@@ -230,63 +227,59 @@ void update_e_i(uint32_t pc, uint32_t now_i){
 //
 #define SLICE(u, i, j) (((u) << (31 - (i))) >> (31 - (i) + (j)))
 
-char *regs[32] = {
-  "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9",
-  "r10", "r11", "r12", "r13", "r14", "r15", "r16", "r17", "r18", "r19",
-  "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29",
-  "rsp", "rbp",
-};
-
-char *aop[] = {
-  [ 0] = "add",     [ 1] = "sub",
-  [ 2] = "shl",     [ 3] = "shr",
-  [ 4] = "sar",     [ 5] = "and",
-  [ 6] = "or",      [ 7] = "xor",
-  [22] = "cmpult",  [23] = "cmpule",
-  [24] = "cmpne",   [25] = "cmpeq",
-  [26] = "cmplt",   [27] = "cmple",
-  [28] = "fcmpne",  [29] = "fcmpeq",
-  [30] = "fcmplt",  [31] = "fcmple",
-};
-
-char *fop[] = {
-  [ 0] = "fadd",    [ 1] = "fsub",
-  [ 2] = "fmul",    [ 3] = "fdiv",
-  [ 4] = "finv",    [ 5] = "fsqrt",
-  [ 6] = "ftoi",    [ 7] = "itof",
-  [ 8] = "floor",
-};
-
-char *fsig[] = {
-  [ 0] = "",
-  [ 1] = ".neg",
-  [ 2] = ".abs",
-  [ 3] = ".abs.neg",
-};
-
-char *dop[] = {
-  [ 1] = "break",
-  [ 2] = "penv",
-  [ 3] = "ptrace",
-};
-
-char *mop[] = {
-  [ 2] = "ldl",
-  [ 3] = "ldh",
-  [ 4] = "sysenter",
-  [ 5] = "sysexit",
-  [ 6] = "st",
-  [ 7] = "stb",
-  [ 8] = "ld",
-  [ 9] = "ldb",
-  [11] = "jl",
-  [12] = "jr",
-  [13] = "bne",
-  [15] = "beq",
-};
-
 void print_disasm(FILE *fp, uint32_t ins)
 {
+  char *regs[32] = {
+    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9",
+    "r10", "r11", "r12", "r13", "r14", "r15", "r16", "r17", "r18", "r19",
+    "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29",
+    "rsp", "rbp",
+  };
+
+  char *aop[] = {
+    [ 0] = "add",     [ 1] = "sub",
+    [ 2] = "shl",     [ 3] = "shr",
+    [ 4] = "sar",     [ 5] = "and",
+    [ 6] = "or",      [ 7] = "xor",
+    [22] = "cmpult",  [23] = "cmpule",
+    [24] = "cmpne",   [25] = "cmpeq",
+    [26] = "cmplt",   [27] = "cmple",
+    [28] = "fcmpne",  [29] = "fcmpeq",
+    [30] = "fcmplt",  [31] = "fcmple",
+  };
+
+  char *fop[] = {
+    [ 0] = "fadd",    [ 1] = "fsub",
+    [ 2] = "fmul",    [ 3] = "fdiv",
+    [ 4] = "finv",    [ 5] = "fsqrt",
+    [ 6] = "ftoi",    [ 7] = "itof",
+    [ 8] = "floor",
+  };
+
+  char *fsig[] = {
+    [ 0] = "",
+    [ 1] = ".neg",
+    [ 2] = ".abs",
+    [ 3] = ".abs.neg",
+  };
+
+  char *dop[] = {
+    [ 1] = "break",
+    [ 2] = "penv",
+    [ 3] = "ptrace",
+  };
+
+  char *mop[] = {
+    [ 4] = "sysenter",
+    [ 5] = "sysexit",
+    [ 6] = "st",
+    [ 7] = "stb",
+    [ 8] = "ld",
+    [ 9] = "ldb",
+    [13] = "bne",
+    [15] = "beq",
+  };
+
   int op, rx, ra, rb, lit, tag, sig, disp;
 
   op = SLICE(ins, 31, 28);
@@ -298,27 +291,52 @@ void print_disasm(FILE *fp, uint32_t ins)
   sig = SLICE(ins, 6, 5);
   disp = SLICE(ins, 15, 0);
 
-  if (lit >= 128)
-    lit -= 256;
-  if ((op == 7 || op == 9) && disp >= 0x8000)
-    disp -= 0x10000;
-  if (op == 6 || op == 8 || op >= 11) {
-    disp *= 4;
-    if (disp >= 0x20000) disp -= 0x40000;
-  }
-
   switch (op) {
-    case 0:
-      fprintf(fp, "%s %s, %s, %s, %d\n", aop[tag], regs[rx], regs[ra], regs[rb], lit);
+    case 0: // ALU
+      if (lit >= 128)
+        lit -= 256;
+      if (tag < 28)
+        fprintf(fp, "%s %s, %s, %s, %d\n", aop[tag], regs[rx], regs[ra], regs[rb], lit);
+      else
+        fprintf(fp, "%s %s, %s, %s\n", aop[tag], regs[rx], regs[ra], regs[rb]);
       break;
-    case 1:
-      fprintf(fp, "%s%s %s, %s, %s\n", fop[tag], fsig[sig], regs[rx], regs[ra], regs[rb]);
+    case 1: // FPU
+      if (tag < 5)
+        fprintf(fp, "%s%s %s, %s, %s\n", fop[tag], fsig[sig], regs[rx], regs[ra], regs[rb]);
+      else
+        fprintf(fp, "%s%s %s, %s\n", fop[tag], fsig[sig], regs[rx], regs[ra]);
       break;
-    case 10:
+    case 2: // ldl
+      fprintf(fp, "ldl %s, %#x\n", regs[rx], disp);
+      break;
+    case 3: // ldh
+      fprintf(fp, "ldh %s, %s, %#x\n", regs[rx], regs[ra], disp);
+      break;
+    case 4: case 5: // sysenter, sysexit
+      fprintf(fp, "%s\n", mop[op]);
+      break;
+    case 6: case 8: case 13: case 15: // st, ld, bne, beq
+      disp *= 4;
+      if (disp >= 0x20000)
+        disp -= 0x40000;
+      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
+      break;
+    case 7: case 9: // stb, ldb
+      if (disp >= 0x8000)
+        disp -= 0x10000;
+      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
+      break;
+    case 10: // debug
       fprintf(fp, "%s %d\n", dop[tag], lit);
       break;
-    default:
-      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], ((int)disp < 0 ? "-" : ""), abs(disp));
+    case 11: // jl
+      disp *= 4;
+      if (disp >= 0x20000)
+        disp -= 0x40000;
+      fprintf(fp, "jl %s, %s%#x\n", regs[rx], disp < 0 ? "-" : "", abs(disp));
+      break;
+    case 12: // jr
+      fprintf(fp, "jr %s\n", regs[rx]);
       break;
   }
 }
