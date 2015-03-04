@@ -993,7 +993,7 @@ argparser.add_argument('-f', help='append label to end of program', metavar='<la
 argparser.add_argument('-k', help='output as array of std_logic_vector format', action='store_true')
 argparser.add_argument('-l', help='set library file to <file>', metavar='<file>', action='append')
 argparser.add_argument('-o', help='set output file to <file>', metavar='<file>', default='a.out')
-argparser.add_argument('-O', help='set optimization level', metavar='<integer>', default=0, type=int)
+argparser.add_argument('-O', help='set optimization level', metavar='<integer>', default=2, type=int)
 argparser.add_argument('-r', help='do not insert main label jump instruction', action='store_true')
 argparser.add_argument('-s', help='output preprocessed assembly', action='store_true')
 argparser.add_argument('-start', help='same as -t (deprecated)', metavar='<label>', dest='t')
