@@ -338,8 +338,6 @@ void update_irqbits()
 
 void interrupt()
 {
-    if (sim_intr_disabled)
-        return;
     update_irqbits();
     if (irq_bits && intr_enabled) {
         intr_enabled = 0;
@@ -411,14 +409,15 @@ void runsim()
     load_file();
     while (1) {
         uint32_t phys_pc;
-        interrupt();
-        debug_hook();
+        if (! sim_intr_disabled)
+            interrupt();
+        if (debug_enabled)
+            debug_hook();
         phys_pc = to_physical(pc);
         if (phys_pc >= mem_size)
             error("program counter out of range");
-        if (reg[0] != 0)
-            error("r0 is not zero");
-        if (mem[phys_pc >> 2] == HALT_CODE) break;
+        if (mem[phys_pc >> 2] == HALT_CODE)
+            break;
         exec(mem[phys_pc >> 2]);
         pc += 4;
         ++inst_cnt;

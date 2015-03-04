@@ -151,8 +151,9 @@ void debug_hook()
 {
   uint32_t phys_pc;
 
-  if (!debug_enabled)
-      return;
+  if (reg[0] != 0)
+    error("r0 is not zero");
+
   phys_pc = to_physical(pc);
   update_e_i(pc, mem[phys_pc >> 2]);
   if (is_indebug) {
