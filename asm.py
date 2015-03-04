@@ -43,7 +43,7 @@ def warning(msg, show_line=False):
 #       utility functions (mainly parsing)
 # ----------------------------------------------------------------------
 
-regs = {'rsp': 30, 'rbp': 31}
+regs = {'rsp': 30, 'rbp': 31, 'rk0': 26, 'rk1': 27}
 for i in range(32):
     regs['r' + str(i)] = i
 
