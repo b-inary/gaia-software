@@ -740,9 +740,7 @@ def add_global(label):
     labels.setdefault(label, {}).setdefault(filename, [-1, False, False])
     labels[label][filename][1] = True
 
-def label_addr(label, cur=-1):
-    if parse_int(label)[0]:
-        return label
+def label_addr(label):
     dic = labels.get(label, {})
     if filename in dic:
         decl = [filename]
@@ -762,16 +760,17 @@ def label_addr(label, cur=-1):
         else:
             error(msg)
     dic[decl[0]][2] = True
-    offset = cur + 4 if cur >= 0 else 0
-    return hex(dic[decl[0]][0] - offset)
+    return dic[decl[0]][0]
 
 def eval_expr(expr):
     r = re.compile(r'[\w.$!?]+')
     m = r.search(expr)
     while m:
-        addr = label_addr(m.group())
-        expr = expr[:m.start()] + addr + expr[m.end():]
-        m = r.search(expr, m.start() + len(addr))
+        success, imm = parse_int(m.group())
+        if not success:
+            addr = str(label_addr(m.group()))
+            expr = expr[:m.start()] + addr + expr[m.end():]
+        m = r.search(expr, m.end() if success else m.start() + len(addr))
     try:
         res = eval(expr, {})
         if not isinstance(res, int):
@@ -877,7 +876,7 @@ def optimize(lines):
                 eff += 4
                 lines[i] = (mnemonic[:3] + '1', operands, filename, pos)
         elif mnemonic in ['call', 'call9']:
-            val = eval_expr(operands[0])
+            val = label_addr(operands[0])
             if check_int_range(val - addr - 16 + (eff if val > addr else -eff), 18):
                 eff += ofs_table[mnemonic] - 24
                 lines[i] = ('call6', operands, filename, pos)
@@ -926,7 +925,7 @@ def resolve_label(lines):
             continue
         if mnemonic in ['call', 'call6', 'call9']:
             addr += ofs_table[mnemonic]
-            val = eval_expr(operands[0])
+            val = label_addr(operands[0])
             if not -0x80000000 <= val <= 0xffffffff:
                 error('expression value too large: ' + hex(val))
             pre = [('st', ['rbp', 'rsp', '-4']),
@@ -953,7 +952,8 @@ def resolve_label(lines):
             continue
         if mnemonic in ['jl', 'bne', 'bne-', 'bne+', 'beq', 'beq-', 'beq+']:
             check_operands_n(operands, 2, 3)
-            operands[-1] = label_addr(operands[-1], addr)
+            if not parse_int(operands[-1])[0]:
+                operands[-1] = hex(label_addr(operands[-1]) - addr - 4)
         if mnemonic == '.int':
             val = eval_expr(operands[0])
             if not -0x80000000 <= val <= 0xffffffff:

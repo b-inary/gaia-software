@@ -124,7 +124,6 @@ main:
     pop     r1
     call    r1
     call    label
-    call    label * 100
     ret
     enter
     enter   16
