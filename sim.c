@@ -18,8 +18,7 @@
 #define IRQ_SERIAL   2
 #define IRQ_SYSENTER 3
 
-#define PGROUNDDOWN(a) (((a)) & ~0xfff)
-#define PGCOLOR(va)    ((uint)(PGROUNDDOWN(va)) & 0x3fff)
+#define PGCOLOR(va)    ((uint)(va) & 0x3000)
 
 uint32_t reg[32];
 uint32_t *mem;
@@ -276,7 +275,10 @@ void exec_misc(uint32_t inst)
             reg[rx] = (disp << 16) | (reg[ra] & 0xffff);
             return;
         case 4:
-            irq_bits |= 1 << IRQ_SYSENTER;
+            intr_enabled = 0;
+            irq_num = IRQ_SYSENTER; // IRQ number
+            epc = (pc + 4) + 4; // GAIA cpus store interrupted address + 4.
+            pc = intr_addr - 4;
             return;
         case 5:
             pc = epc - 4;
