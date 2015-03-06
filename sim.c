@@ -18,7 +18,7 @@
 #define IRQ_SERIAL   2
 #define IRQ_SYSENTER 3
 
-#define PGCOLOR(va)    ((uint)(va) & 0x3000)
+#define PGCOLOR(va)    ((va) & 0x3000)
 
 uint32_t reg[32];
 uint32_t *mem;
