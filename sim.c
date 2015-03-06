@@ -18,6 +18,9 @@
 #define IRQ_SERIAL   2
 #define IRQ_SYSENTER 3
 
+#define PGROUNDDOWN(a) (((a)) & ~0xfff)
+#define PGCOLOR(va)    ((uint)(PGROUNDDOWN(va)) & 0x3fff)
+
 uint32_t reg[32];
 uint32_t *mem;
 uint32_t mem_size = 0x400000;
@@ -152,7 +155,10 @@ uint32_t to_physical(uint32_t addr)
     tmp = mem[tmp >> 2];
     if ((tmp & 1) == 0)
         error("to_physical: invalid PTE, Requested virtual address: 0x%08x", addr);
-    return (tmp & ~0x0fff) | (addr & 0x0fff);
+    tmp = (tmp & ~0x0fff) | (addr & 0x0fff);
+    if (PGCOLOR(tmp) != PGCOLOR(addr))
+        error("to_physical: invalid page color: Physical adrress: 0x%08x, Requested virtual address: 0x%08x", tmp, addr);
+    return tmp;
 }
 
 int has_input()
