@@ -28,6 +28,7 @@ uint32_t pc;
 uint32_t prog_size;
 uint32_t intr_addr, intr_enabled, epc, irq_num, irq_bits;
 uint32_t mmu_enabled, pd_addr;
+int debug_enabled;
 long long inst_cnt;
 struct termios original_ttystate;
 
@@ -87,21 +88,22 @@ float bitfloat(uint32_t x)
 
 uint32_t alu(int tag, int ra, int rb, uint32_t lit)
 {
+    uint32_t t = reg[rb] + lit;
     switch (tag) {
-        case  0: return reg[ra] + reg[rb] + lit;
-        case  1: return reg[ra] - reg[rb] - lit;
-        case  2: return reg[ra] << (reg[rb] + lit);
-        case  3: return reg[ra] >> (reg[rb] + lit);
-        case  4: return (int32_t)reg[ra] >> (reg[rb] + lit);
-        case  5: return reg[ra] & reg[rb] & lit;
-        case  6: return reg[ra] | reg[rb] | lit;
-        case  7: return reg[ra] ^ reg[rb] ^ lit;
-        case 22: return reg[ra] <  reg[rb] + lit;
-        case 23: return reg[ra] <= reg[rb] + lit;
-        case 24: return reg[ra] != reg[rb] + lit;
-        case 25: return reg[ra] == reg[rb] + lit;
-        case 26: return (int32_t)reg[ra] <  (int32_t)(reg[rb] + lit);
-        case 27: return (int32_t)reg[ra] <= (int32_t)(reg[rb] + lit);
+        case  0: return reg[ra] + t;
+        case  1: return reg[ra] - t;
+        case  2: return reg[ra] << t;
+        case  3: return reg[ra] >> t;
+        case  4: return (int32_t)reg[ra] >> t;
+        case  5: return reg[ra] & t;
+        case  6: return reg[ra] | t;
+        case  7: return reg[ra] ^ t;
+        case 22: return reg[ra] <  t;
+        case 23: return reg[ra] <= t;
+        case 24: return reg[ra] != t;
+        case 25: return reg[ra] == t;
+        case 26: return (int32_t)reg[ra] <  (int32_t)t;
+        case 27: return (int32_t)reg[ra] <= (int32_t)t;
         case 28: return bitfloat(reg[ra]) != bitfloat(reg[rb]);
         case 29: return bitfloat(reg[ra]) == bitfloat(reg[rb]);
         case 30: return bitfloat(reg[ra]) <  bitfloat(reg[rb]);
@@ -265,7 +267,7 @@ void exec_misc(uint32_t inst)
     int opcode = inst >> 28;
     int rx = (inst >> 23) & 31;
     int ra = (inst >> 18) & 31;
-    uint32_t disp = inst & 0xffff;
+    uint32_t disp = inst & 0xffff, tmp;
     if (disp >= 0x8000) disp -= 0x10000;
     switch (opcode) {
         case 2:
@@ -275,39 +277,44 @@ void exec_misc(uint32_t inst)
             reg[rx] = (disp << 16) | (reg[ra] & 0xffff);
             return;
         case 4:
+            reg[rx] = pc + 4;
+            pc += disp << 2;
+            return;
+        case 5:
+            if (reg[ra] & 3)
+                error("jr: register corrupted: r%d", ra);
+            if (to_physical(reg[ra]) >= mem_size)
+                error("jr: jump destination out of range: r%d", ra);
+            tmp = reg[ra];
+            reg[rx] = pc + 4;
+            pc = tmp - 4;
+            return;
+        case 6:
+            reg[rx] = load(ra, disp);
+            return;
+        case 7:
+            reg[rx] = load_byte(ra, disp);
+            return;
+        case 8:
+            store(ra, disp, reg[rx]);
+            return;
+        case 9:
+            store_byte(ra, disp, reg[rx]);
+            return;
+        case 10:
+            exec_debug(rx, disp);
+            return;
+        case 12:
             intr_enabled = 0;
             irq_num = IRQ_SYSENTER; // IRQ number
             epc = (pc + 4) + 4; // GAIA cpus store interrupted address + 4.
             pc = intr_addr - 4;
             return;
-        case 5:
+        case 13:
             pc = epc - 4;
             intr_enabled = 1;
             return;
-        case 6:
-            store(ra, disp, reg[rx]);
-            return;
-        case 7:
-            store_byte(ra, disp, reg[rx]);
-            return;
-        case 8:
-            reg[rx] = load(ra, disp);
-            return;
-        case 9:
-            reg[rx] = load_byte(ra, disp);
-            return;
-        case 11:
-            reg[rx] = pc + 4;
-            pc += disp << 2;
-            return;
-        case 12:
-            if (reg[rx] & 3)
-                error("jr: register corrupted: r%d", rx);
-            if (to_physical(reg[rx]) >= mem_size)
-                error("jr: jump destination out of range: r%d", rx);
-            pc = reg[rx] - 4;
-            return;
-        case 13:
+        case 14:
             if (reg[rx] != reg[ra]) pc += disp << 2;
             return;
         case 15:
@@ -324,7 +331,6 @@ void exec(uint32_t inst)
     switch (opcode) {
         case  0: exec_alu(inst); break;
         case  1: exec_fpu(inst); break;
-        case 10: exec_debug(inst); break;
         default: exec_misc(inst); break;
     }
 }

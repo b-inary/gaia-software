@@ -45,7 +45,7 @@ main:
     st      r1, r2, 4
     ld      r1, r2, 4
     jl      r1, 4
-    jr      r1
+    jr      r1, r2
     bne     r1, r2, 4
     beq     r1, r2, 4
     fadd.neg r1, r2, r3
@@ -89,10 +89,6 @@ main:
     add     r1, r2, 3
     add     r1, r2, 345
     add     r1, r2, 345678
-    and     r1, r2, r3
-    and     r1, r2, 3
-    and     r1, r2, 345
-    and     r1, r2, 345678
     neg     r1, r2
     not     r1, r2
     zextb   r1, r2
@@ -108,6 +104,7 @@ main:
     read    r1
     write   r1
     write   r1, "\"Hello, world!\"\n"
+    jr      r1
     br      label
     bz+     r1, label2
     bnz-    r1, label3

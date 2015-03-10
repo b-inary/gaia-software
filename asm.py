@@ -70,8 +70,8 @@ def check_int_range(i, b):
 
 def float_to_bit(f):
     try:
-        s = struct.pack('>f', f)
-        return struct.unpack('>I', s)[0]
+        s = struct.pack('f', f)
+        return struct.unpack('I', s)[0]
     except OverflowError:
         error('floating point value is too large')
 
@@ -79,8 +79,7 @@ def parse_memaccess(operand):
     m = re.match(r'\[\s*(r\w+)\s*([+-])\s*(\w+)\s*\]$', operand)
     if m:
         base = m.group(1)
-        disp = ('' if m.group(2) == '+' else '-') + m.group(3)
-        success, imm = parse_int(disp)
+        success, imm = parse_int(m.group(2) + m.group(3))
         if base in regs and success:
             return True, base, imm
     m = re.match(r'\[\s*(r\w+)\s*\]$', operand)
@@ -170,26 +169,22 @@ fpu3_table = {
 }
 
 misc0_table = {
-    'sysenter':  4,
-    'sysexit':   5,
-}
-
-misc1_table = {
-    'jr':       12,
+    'sysenter': 12,
+    'sysexit':  13,
 }
 
 misc2_table = {
     'ldl':       2,
-    'jl':       11,
+    'jl':        4,
 }
 
 misc3_table = {
     'ldh':       3,
-    'st':        6,
-    'stb':       7,
-    'ld':        8,
-    'ldb':       9,
-    'bne':      13,
+    'ld':        6,
+    'ldb':       7,
+    'st':        8,
+    'stb':       9,
+    'bne':      14,
     'beq':      15,
 }
 
@@ -275,10 +270,6 @@ def on_misc0(operands, op, pred, disp_mode):
     check_operands_n(operands, 0)
     return code_m(op, 'r0', 'r0', pred, '0', disp_mode)
 
-def on_misc1(operands, op, pred, disp_mode):
-    check_operands_n(operands, 1)
-    return code_m(op, operands[0], 'r0', pred, '0', disp_mode)
-
 def on_misc2(operands, op, pred, disp_mode):
     check_operands_n(operands, 2)
     return code_m(op, operands[0], 'r0', pred, operands[1], disp_mode)
@@ -287,9 +278,13 @@ def on_misc3(operands, op, pred, disp_mode):
     check_operands_n(operands, 3)
     return code_m(op, operands[0], operands[1], pred, operands[2], disp_mode)
 
+def on_jr(operands):
+    check_operands_n(operands, 2)
+    return code_m(5, operands[0], operands[1], 3, '0', 0)
+
 def on_debug(operands, tag):
     check_operands_n(operands, 1)
-    return code_i(10, 'r0', 'r0', 'r0', operands[0], tag)
+    return code_m(10, 'r{}'.format(tag), 'r0', 0, operands[0], 0)
 
 def on_dot_int(operands):
     success, imm = parse_int(operands[0])
@@ -338,7 +333,7 @@ def code(mnemonic, operands):
         return on_fpu2(operands, sign_table[fpu_suffix], fpu2_table[fpu_mnemonic])
     if fpu_mnemonic in fpu3_table:
         return on_fpu3(operands, sign_table[fpu_suffix], fpu3_table[fpu_mnemonic])
-    pred = 3 if mnemonic in ['jl', 'jr', 'bne+', 'beq+'] else 0
+    pred = 3 if mnemonic in ['jl', 'bne+', 'beq+'] else 0
     disp_mode = 0 if mnemonic in ['ldl', 'ldh'] else \
                 1 if mnemonic in ['ldb', 'stb'] else 2
     if mnemonic in ['bne-', 'bne+']:
@@ -347,12 +342,12 @@ def code(mnemonic, operands):
         mnemonic = 'beq'
     if mnemonic in misc0_table:
         return on_misc0(operands, misc0_table[mnemonic], pred, disp_mode)
-    if mnemonic in misc1_table:
-        return on_misc1(operands, misc1_table[mnemonic], pred, disp_mode)
     if mnemonic in misc2_table:
         return on_misc2(operands, misc2_table[mnemonic], pred, disp_mode)
     if mnemonic in misc3_table:
         return on_misc3(operands, misc3_table[mnemonic], pred, disp_mode)
+    if mnemonic == 'jr':
+        return on_jr(operands)
     if mnemonic in debug_table:
         return on_debug(operands, debug_table[mnemonic])
     if mnemonic == '.int':
@@ -426,7 +421,7 @@ def expand_mov(operands):
         return [('mov', operands)]
     error('invalid syntax')
 
-# and, sub, shl, shr, sar, or, xor, cmpne, cmpeq, cmplt, cmple
+# and, sub, shl, shr, sar, and, or, xor, cmpne, cmpeq, cmplt, cmple
 def expand_alu(op, operands):
     check_operands_n(operands, 3, 4)
     if (len(operands) == 4):
@@ -461,19 +456,6 @@ def expand_movb(operands):
               ([('add', ['r29', base, 'r29', '0'])] if base != 'r0' else []) + \
                [('stb', [operands[1], 'r29', hex(((disp + 0x8000) & 0xffff) - 0x8000)])]
     error('movb only supports move between register and memory')
-
-def expand_and(operands):
-    check_operands_n(operands, 3, 4)
-    if (len(operands) == 4):
-        return [('and', operands)]
-    if operands[2] in regs:
-        return [('and', operands + ['-1'])]
-    success, imm = parse_int(operands[2])
-    if success:
-        if check_int_range(imm, 8):
-            return [('and', [operands[0], operands[1], operands[1], operands[2]])]
-        return mov_imm('r29', imm) + [('and', [operands[0], operands[1], 'r29', '-1'])]
-    error('expected register or immediate value: ' + operands[2])
 
 def expand_neg(operands):
     check_operands_n(operands, 2)
@@ -536,6 +518,12 @@ def expand_write(operands):
     l = [mov_imm(operands[0], ord(c)) + [('st', [operands[0], 'r29', '0x1000'])] for c in s]
     return [('ldh', ['r29', 'r0', '0x8000'])] + sum(l, [])
 
+def expand_jr(operands):
+    check_operands_n(operands, 1, 2)
+    if len(operands) == 1:
+        return [('jr', ['r29', operands[0]])]
+    return [('jr', operands)]
+
 def expand_br(operands):
     check_operands_n(operands, 1)
     return [('jl', ['r29', operands[0]])]
@@ -592,16 +580,14 @@ def expand_call(operands):
         return [('st', ['rbp', 'rsp', '-4']),
                 ('sub', ['rsp', 'rsp', 'r0', '4']),
                 ('add', ['rbp', 'rsp', 'r0', '0']),
-                ('jl', ['r28', '0']),
-                ('add', ['r28', 'r28', 'r0', '8']),
-                ('jr', operands),
+                ('jr', ['r28', operands[0]]),
                 ('add', ['rsp', 'rbp', 'r0', '4']),
                 ('ld', ['rbp', 'rsp', '-4'])]
     return [('call', operands)]
 
 def expand_ret(operands):
     check_operands_n(operands, 0)
-    return [('jr', ['r28'])]
+    return [('jr', ['r29', 'r28'])]
 
 def expand_enter(operands):
     check_operands_n(operands, 0, 1)
@@ -649,7 +635,6 @@ macro_table = {
     'nop':      expand_nop,
     'mov':      expand_mov,
     'movb':     expand_movb,
-    'and':      expand_and,
     'neg':      expand_neg,
     'not':      expand_not,
     'sextb':    expand_sextb,
@@ -660,6 +645,7 @@ macro_table = {
     'fcmpge':   expand_fcmpge,
     'read':     expand_read,
     'write':    expand_write,
+    'jr':       expand_jr,
     'br':       expand_br,
     'push':     expand_push,
     'pop':      expand_pop,
@@ -680,7 +666,7 @@ def expand_macro(line):
         return []
     if mnemonic in macro_table:
         return macro_table[mnemonic](operands)
-    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'or', 'xor',
+    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'and', 'or', 'xor',
                     'cmpne', 'cmpeq', 'cmplt', 'cmple', 'cmpult', 'cmpule']:
         return expand_alu(mnemonic, operands)
     if mnemonic in ['cmpgt', 'cmpge', 'cmpugt', 'cmpuge']:
@@ -717,9 +703,9 @@ ofs_table = {
     'ldb2':      8,
     'st2':       8,
     'stb2':      8,
-    'call':     40,
+    'call':     32,
     'call6':    24,
-    'call9':    36,
+    'call7':    28,
 }
 
 def add_label(label, i):
@@ -875,14 +861,14 @@ def optimize(lines):
             if check_int_range(eval_expr(operands[1]), 16):
                 eff += 4
                 lines[i] = (mnemonic[:3] + '1', operands, filename, pos)
-        elif mnemonic in ['call', 'call9']:
+        elif mnemonic in ['call', 'call7']:
             val = label_addr(operands[0])
             if check_int_range(val - addr - 16 + (eff if val > addr else -eff), 18):
                 eff += ofs_table[mnemonic] - 24
                 lines[i] = ('call6', operands, filename, pos)
             elif mnemonic == 'call' and check_int_range(val, 16):
                 eff += 4
-                lines[i] = ('call9', operands, filename, pos)
+                lines[i] = ('call7', operands, filename, pos)
             addr += ofs_table[mnemonic]
         else:
             addr += calc_ofs(mnemonic, operands, addr)
@@ -923,7 +909,7 @@ def resolve_label(lines):
             ret.append(('ldh', ['r29', 'r0', hex(hi)], filename, pos))
             ret.append((mnemonic[:-1], [operands[0], 'r29', hex(lo)], filename, pos))
             continue
-        if mnemonic in ['call', 'call6', 'call9']:
+        if mnemonic in ['call', 'call6', 'call7']:
             addr += ofs_table[mnemonic]
             val = label_addr(operands[0])
             if not -0x80000000 <= val <= 0xffffffff:
@@ -934,12 +920,12 @@ def resolve_label(lines):
             if mnemonic == 'call6':
                 mid = [('jl', ['r28', hex(val - addr + 8)])]
             else:
-                if mnemonic == 'call9':
+                if mnemonic == 'call7':
                     mid = [('ldl', ['r29', hex(val)])]
                 else:
                     mid = [('ldl', ['r29', hex(val & 0xffff)]),
                            ('ldh', ['r29', 'r29', hex(val >> 16 & 0xffff)])]
-                mid += [('jl', ['r28', '0']), ('add', ['r28', 'r28', 'r0', '8']), ('jr', ['r29'])]
+                mid.append(('jr', ['r28', 'r29']))
             post = [('add', ['rsp', 'rbp', 'r0', '4']), ('ld', ['rbp', 'rsp', '-4'])]
             ret.extend(map(lambda (x, y): (x, y, filename, pos), pre + mid + post))
             continue
@@ -1044,7 +1030,7 @@ if args.f:
 # 1. macro expansion
 lines1 = []
 if not args.r:
-    lines1 = [('mov', ['r29', start_label], '', 0), ('jr', ['r29'], '', 0)]
+    lines1 = [('mov', ['r29', start_label], '', 0), ('jr', ['r29', 'r29'], '', 0)]
 for line, filename, pos in lines0:
     lines = expand_macro(line)
     lines1.extend(map(lambda (x, y): (x, y, filename, pos), lines))

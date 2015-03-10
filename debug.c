@@ -13,7 +13,8 @@ uint32_t to_physical(uint32_t);
 uint32_t load(int ra, uint32_t disp);
 void print_env(int show_vpc);
 
-int debug_enabled;
+// Disable debugging feature if simulation speed is needed. Default: 0
+extern int debug_enabled;
 
 // defined in sim.c
 void init_term();
@@ -33,14 +34,11 @@ void enable_break_all();
 
 int break_disabled[8];
 
-void exec_debug(uint32_t inst)
+void exec_debug(int tag, int lit)
 {
-  uint32_t tag, lit;
-
   if (!debug_enabled)
-      return;
-  tag = inst & 31;
-  lit = (inst >> 5) & 255;
+    return;
+
   switch (tag) {
     case OP_BREAK:
       if (is_break_disabled(lit))
@@ -58,7 +56,7 @@ void exec_debug(uint32_t inst)
       dump_e_i();
       break;
     default:
-      error("instruction decode error");
+      error("instruction decode error (debug)");
   }
 }
 
@@ -271,13 +269,13 @@ void print_disasm(FILE *fp, uint32_t ins)
   };
 
   char *mop[] = {
-    [ 4] = "sysenter",
-    [ 5] = "sysexit",
-    [ 6] = "st",
-    [ 7] = "stb",
-    [ 8] = "ld",
-    [ 9] = "ldb",
-    [13] = "bne",
+    [ 6] = "ld",
+    [ 7] = "ldb",
+    [ 8] = "st",
+    [ 9] = "stb",
+    [12] = "sysenter",
+    [13] = "sysexit",
+    [14] = "bne",
     [15] = "beq",
   };
 
@@ -313,31 +311,31 @@ void print_disasm(FILE *fp, uint32_t ins)
     case 3: // ldh
       fprintf(fp, "ldh %s, %s, %#x\n", regs[rx], regs[ra], disp);
       break;
-    case 4: case 5: // sysenter, sysexit
-      fprintf(fp, "%s\n", mop[op]);
-      break;
-    case 6: case 8: case 13: case 15: // st, ld, bne, beq
-      disp *= 4;
-      if (disp >= 0x20000)
-        disp -= 0x40000;
-      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
-      break;
-    case 7: case 9: // stb, ldb
-      if (disp >= 0x8000)
-        disp -= 0x10000;
-      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
-      break;
-    case 10: // debug
-      fprintf(fp, "%s %d\n", dop[tag], lit);
-      break;
-    case 11: // jl
+    case 4: // jl
       disp *= 4;
       if (disp >= 0x20000)
         disp -= 0x40000;
       fprintf(fp, "jl %s, %s%#x\n", regs[rx], disp < 0 ? "-" : "", abs(disp));
       break;
-    case 12: // jr
-      fprintf(fp, "jr %s\n", regs[rx]);
+    case 5: // jr
+      fprintf(fp, "jr %s, %s\n", regs[rx], regs[ra]);
+      break;
+    case 6: case 8: case 14: case 15: // ld, st, bne, beq
+      disp *= 4;
+      if (disp >= 0x20000)
+        disp -= 0x40000;
+      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
+      break;
+    case 7: case 9: // ldb, stb
+      if (disp >= 0x8000)
+        disp -= 0x10000;
+      fprintf(fp, "%s %s, %s, %s%#x\n", mop[op], regs[rx], regs[ra], disp < 0 ? "-" : "", abs(disp));
+      break;
+    case 10: // debug
+      fprintf(fp, "%s %d\n", dop[rx], disp);
+      break;
+    case 12: case 13: // sysenter, sysexit
+      fprintf(fp, "%s\n", mop[op]);
       break;
   }
 }
