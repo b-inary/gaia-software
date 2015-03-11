@@ -192,6 +192,7 @@ uint32_t load(int ra, uint32_t disp)
     } else {
         switch (addr) {
             case 0x80001000: return serial_read();
+            case 0x80001004: return 1; // Tx ready bit is already high in simulation
             case 0x80001100: return intr_addr;
             case 0x80001104: return intr_enabled;
             case 0x80001108: return epc;
@@ -307,7 +308,7 @@ void exec_misc(uint32_t inst)
         case 12:
             intr_enabled = 0;
             irq_num = IRQ_SYSENTER; // IRQ number
-            epc = (pc + 4) + 4; // GAIA cpus store interrupted address + 4.
+            epc = pc + 4; // GAIA cpus store the correct interrupted address for sysenter exception.
             pc = intr_addr - 4;
             return;
         case 13:
