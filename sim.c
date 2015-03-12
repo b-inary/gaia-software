@@ -104,12 +104,17 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case 25: return reg[ra] == t;
         case 26: return (int32_t)reg[ra] <  (int32_t)t;
         case 27: return (int32_t)reg[ra] <= (int32_t)t;
-        case 28: return bitfloat(reg[ra]) != bitfloat(reg[rb]);
-        case 29: return bitfloat(reg[ra]) == bitfloat(reg[rb]);
+        // case 28: return bitfloat(reg[ra]) != bitfloat(reg[rb]);
+        // case 29: return bitfloat(reg[ra]) == bitfloat(reg[rb]);
         case 30: return bitfloat(reg[ra]) <  bitfloat(reg[rb]);
         case 31: return bitfloat(reg[ra]) <= bitfloat(reg[rb]);
         default: error("instruction decode error (ALU)");
     }
+}
+
+uint32_t care_minus_zero(uint32_t x)
+{
+    return x == 0x80000000 ? 0 : x;
 }
 
 uint32_t fpu(int tag, int ra, int rb)
@@ -117,10 +122,10 @@ uint32_t fpu(int tag, int ra, int rb)
     switch (tag) {
         case 0:  return bitint(bitfloat(reg[ra]) + bitfloat(reg[rb]));
         case 1:  return bitint(bitfloat(reg[ra]) - bitfloat(reg[rb]));
-        case 2:  return bitint(bitfloat(reg[ra]) * bitfloat(reg[rb]));
-        case 3:  return bitint(bitfloat(reg[ra]) / bitfloat(reg[rb]));
-        case 4:  return bitint(1.0 / bitfloat(reg[ra]));
-        case 5:  return bitint(sqrtf(bitfloat(reg[ra])));
+        case 2:  return care_minus_zero(bitint(bitfloat(reg[ra]) * bitfloat(reg[rb])));
+        // case 3:  return bitint(bitfloat(reg[ra]) / bitfloat(reg[rb]));
+        // case 4:  return bitint(1.0 / bitfloat(reg[ra]));
+        // case 5:  return bitint(sqrtf(bitfloat(reg[ra])));
         case 6:  return (int32_t)roundf(bitfloat(reg[ra]));
         case 7:  return bitint((float)(int32_t)reg[ra]);
         case 8:  return bitint(floorf(bitfloat(reg[ra])));
@@ -131,9 +136,9 @@ uint32_t fpu(int tag, int ra, int rb)
 uint32_t fpu_sign(uint32_t x, int mode)
 {
     switch (mode) {
-        case 1:  return x ^ 0x80000000;
+        case 1:  return care_minus_zero(x ^ 0x80000000);
         case 2:  return x & 0x7fffffff;
-        case 3:  return x | 0x80000000;
+        case 3:  return care_minus_zero(x | 0x80000000);
         default: return x;
     }
 }

@@ -130,8 +130,8 @@ def parse(line):
 # ----------------------------------------------------------------------
 
 alu3_table = {
-    'fcmpne':   28,
-    'fcmpeq':   29,
+    # 'fcmpne':   28,
+    # 'fcmpeq':   29,
     'fcmplt':   30,
     'fcmple':   31,
 }
@@ -154,8 +154,8 @@ alu4_table = {
 }
 
 fpu2_table = {
-    'finv':      4,
-    'fsqrt':     5,
+    # 'finv':      4,
+    # 'fsqrt':     5,
     'ftoi':      6,
     'itof':      7,
     'floor':     8,
@@ -165,7 +165,7 @@ fpu3_table = {
     'fadd':      0,
     'fsub':      1,
     'fmul':      2,
-    'fdiv':      3,
+    # 'fdiv':      3,
 }
 
 misc0_table = {
