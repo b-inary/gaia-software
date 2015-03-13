@@ -513,7 +513,11 @@ def expand_read(operands):
 def expand_write(operands):
     check_operands_n(operands, 1, 2)
     if len(operands) == 1:
-        return [('ldh', ['r29', 'r0', '0x8000']), ('st', [operands[0], 'r29', '0x1000'])]
+        return [('ldh', ['r29', 'r0', '0x8000']),
+                ('ld', ['r29', 'r29', '0x1004']),
+                ('beq', ['r29', 'r0', '-12']),
+                ('ldh', ['r29', 'r0', '0x8000']),
+                ('st', [operands[0], 'r29', '0x1000'])]
     s = eval_string(operands[1])
     l = [mov_imm(operands[0], ord(c)) + [('st', [operands[0], 'r29', '0x1000'])] for c in s]
     return [('ldh', ['r29', 'r0', '0x8000'])] + sum(l, [])

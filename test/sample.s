@@ -25,16 +25,11 @@ main:
     cmpeq   r1, r2, r3, 4
     cmplt   r1, r2, r3, 4
     cmple   r1, r2, r3, 4
-    fcmpne  r1, r2, r3
-    fcmpeq  r1, r2, r3
     fcmplt  r1, r2, r3
     fcmple  r1, r2, r3
     fadd    r1, r2, r3
     fsub    r1, r2, r3
     fmul    r1, r2, r3
-    fdiv    r1, r2, r3
-    finv    r1, r2
-    fsqrt   r1, r2
     ftoi    r1, r2
     itof    r1, r2
     floor   r1, r2
