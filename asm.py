@@ -286,14 +286,13 @@ def on_debug(operands, tag):
     check_operands_n(operands, 1)
     return code_m(10, 'r{}'.format(tag), 'r0', 0, operands[0], 0)
 
-def on_dot_int(operands):
-    success, imm = parse_int(operands[0])
+def on_dot_int(operand):
+    success, imm = parse_int(operand)
     if not success:
-        error('expected integer literal: ' + operands[0])
+        error('expected integer literal: ' + operand)
     if not -0x80000000 <= imm <= 0xffffffff:
-        error('immediate value too large: ' + operands[0])
-    cnt = int(operands[1], 0)
-    return ''.join(chr(imm >> x & 255) for x in [0, 8, 16, 24]) * cnt
+        error('immediate value too large: ' + operand)
+    return ''.join(chr(imm >> x & 255) for x in [0, 8, 16, 24])
 
 def on_dot_byte(operand):
     success, imm = parse_int(operand)
@@ -351,7 +350,7 @@ def code(mnemonic, operands):
     if mnemonic in debug_table:
         return on_debug(operands, debug_table[mnemonic])
     if mnemonic == '.int':
-        return on_dot_int(operands)
+        return ''.join(on_dot_int(operand) for operand in operands)
     if mnemonic == '.byte':
         return ''.join(on_dot_byte(operand) for operand in operands)
     if mnemonic == '.short':
@@ -610,19 +609,13 @@ def expand_halt(operands):
     check_operands_n(operands, 0)
     return [('beq+', ['r31', 'r31', '-4'])]
 
-def expand_dot_int(operands):
-    check_operands_n(operands, 1, 2)
-    if len(operands) == 2:
-        warning('.int with 2 operands is deprecated, use .space instead', True)
-        return [('.int', operands)]
-    return [('.int', [operands[0], '1'])]
-
 def expand_dot_float(operands):
-    check_operands_n(operands, 1)
-    success, imm = parse_float(operands[0])
-    if not success:
-        error('expected floating point literal: ' + operands[0])
-    return expand_dot_int([str(float_to_bit(imm))])
+    def go(operand):
+        success, floimm = parse_float(operand)
+        if not success:
+            error('expected floating point literal: ' + operand)
+        return hex(float_to_bit(floimm))
+    return [('.int', map(go, operands))]
 
 def expand_dot_space(operands):
     check_operands_n(operands, 1, 2)
@@ -658,7 +651,6 @@ macro_table = {
     'enter':    expand_enter,
     'leave':    expand_leave,
     'halt':     expand_halt,
-    '.int':     expand_dot_int,
     '.float':   expand_dot_float,
     '.space':   expand_dot_space,
     '.string':  expand_dot_string,
@@ -778,7 +770,7 @@ def calc_ofs(mnemonic, operands, addr=0):
     if mnemonic == '.byte':
         return len(operands)
     if mnemonic == '.int':
-        return 4 * int(operands[1], 0)
+        return 4 * len(operands)
     if mnemonic == '.short':
         return 2 * len(operands)
     if mnemonic == '.space':
@@ -809,11 +801,7 @@ def init_label_first(lines):
             check_operands_n(operands, 1)
             add_global(operands[0])
         elif mnemonic == '.int':
-            check_operands_n(operands, 2)
-            success, imm = parse_int(operands[1])
-            if not success:
-                error('expected integer literal: ' + operands[1])
-            addr += 4 * imm
+            addr += 4 * len(operands)
         elif mnemonic == '.set':
             check_operands_n(operands, 2)
             add_label(operands[0], eval_expr(operands[1]))
@@ -945,10 +933,12 @@ def resolve_label(lines):
             if not parse_int(operands[-1])[0]:
                 operands[-1] = hex(label_addr(operands[-1]) - addr - 4)
         if mnemonic == '.int':
-            val = eval_expr(operands[0])
-            if not -0x80000000 <= val <= 0xffffffff:
-                error('expression value too large: ' + hex(val))
-            operands[0] = str(val) if check_int_range(val, 8) else hex(val)
+            def go(operand):
+                val = eval_expr(operand)
+                if not -0x80000000 <= val <= 0xffffffff:
+                    error('expression value too large: ' + hex(val))
+                return str(val) if check_int_range(val, 8) else hex(val)
+            operands = map(go, operands)
         addr += calc_ofs(mnemonic, operands)
         ret.append((mnemonic, operands, filename, pos))
     if addr - entry_point > 0x400000:

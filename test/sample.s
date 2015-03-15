@@ -126,9 +126,9 @@ main:
     .byte   1, 2, 3
     .string "literal"
     .align  4
-    .int    42
+    .int    42, 84, 126, 168
     .int    label & ~label2
-    .float  -1.2e34
+    .float  -1.2e34, 5.6
     .set    label2, 0x1234
     .set    label3, label + label2 * 4
     .short  77, 777, 7777
