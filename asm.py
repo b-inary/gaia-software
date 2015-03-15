@@ -154,8 +154,8 @@ alu4_table = {
 }
 
 fpu2_table = {
-    # 'finv':      4,
-    # 'fsqrt':     5,
+    'finv':      4,
+    'fsqrt':     5,
     'ftoi':      6,
     'itof':      7,
     'floor':     8,
