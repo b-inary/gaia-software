@@ -1,4 +1,4 @@
-SRC    = sim.c debug.c
+SRC    = sim.c debug.c libfpu.a
 TARGET = sim
 
 CFLAGS = -Wall -Wextra -O2 -std=gnu99 -g

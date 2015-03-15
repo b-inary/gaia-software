@@ -10,6 +10,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include "debug.h"
+#include "fpu.h"
 
 #define HALT_CODE   0xffffffff
 
@@ -33,7 +34,7 @@ long long inst_cnt;
 struct termios original_ttystate;
 
 char infile[128];
-int show_stat, boot_test, sim_intr_disabled;
+int show_stat, boot_test, sim_intr_disabled, use_maswag_fpu;
 
 uint32_t to_physical(uint32_t);
 void restore_term();
@@ -112,17 +113,12 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
     }
 }
 
-uint32_t care_minus_zero(uint32_t x)
-{
-    return x == 0x80000000 ? 0 : x;
-}
-
 uint32_t fpu(int tag, int ra, int rb)
 {
     switch (tag) {
         case 0:  return bitint(bitfloat(reg[ra]) + bitfloat(reg[rb]));
         case 1:  return bitint(bitfloat(reg[ra]) - bitfloat(reg[rb]));
-        case 2:  return care_minus_zero(bitint(bitfloat(reg[ra]) * bitfloat(reg[rb])));
+        case 2:  return bitint(bitfloat(reg[ra]) * bitfloat(reg[rb]));
         // case 3:  return bitint(bitfloat(reg[ra]) / bitfloat(reg[rb]));
         case 4:  return bitint(1.0 / bitfloat(reg[ra]));
         case 5:  return bitint(sqrtf(bitfloat(reg[ra])));
@@ -133,14 +129,35 @@ uint32_t fpu(int tag, int ra, int rb)
     }
 }
 
+uint32_t fpu_maswag(int tag, int ra, int rb)
+{
+    switch (tag) {
+        case 0:  return fadd(reg[ra], reg[rb]);
+        case 1:  return fsub(reg[ra], reg[rb]);
+        case 2:  return fmul(reg[ra], reg[rb]);
+        // case 3:  return fdiv(reg[ra], reg[rb]);
+        case 4:  return finv(reg[ra]);
+        case 5:  return fsqrt(reg[ra]);
+        case 6:  return h_f2i(reg[ra]);
+        case 7:  return h_i2f(reg[ra]);
+        case 8:  return h_floor(reg[ra]);
+        default: error("instruction decode error (FPU)");
+    }
+}
+
 uint32_t fpu_sign(uint32_t x, int mode)
 {
     switch (mode) {
-        case 1:  return care_minus_zero(x ^ 0x80000000);
+        case 1:  return x ^ 0x80000000;
         case 2:  return x & 0x7fffffff;
-        case 3:  return care_minus_zero(x | 0x80000000);
+        case 3:  return x | 0x80000000;
         default: return x;
     }
+}
+
+uint32_t care_minus_zero(uint32_t x)
+{
+    return x == 0x80000000 ? 0 : x;
 }
 
 // Warning: Error messages in "to_physical" MUST starts with "to_physical: " to prevent
@@ -265,7 +282,8 @@ void exec_fpu(uint32_t inst)
     int ra = (inst >> 18) & 31;
     int rb = (inst >> 13) & 31;
     int sign = (inst >> 5) & 3;
-    reg[rx] = fpu_sign(fpu(tag, ra, rb), sign);
+    uint32_t res = use_maswag_fpu ? fpu_maswag(tag, ra, rb) : fpu(tag, ra, rb);
+    reg[rx] = care_minus_zero(fpu_sign(res, sign));
 }
 
 void exec_misc(uint32_t inst)
@@ -450,6 +468,7 @@ void print_help(char *prog)
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -boot-test        bootloader test mode\n");
     fprintf(stderr, "  -debug            enable debugging feature\n");
+    fprintf(stderr, "  -fpu-maswag       use MasWag's FPU\n");
     fprintf(stderr, "  -msize <integer>  change memory size (MB)\n");
     fprintf(stderr, "  -no-interrupt     disable interrupt feature\n");
     fprintf(stderr, "  -simple           same as -no-interrupt\n");
@@ -465,6 +484,8 @@ void parse_cmd(int argc, char *argv[])
             boot_test = 1;
         } else if (strcmp(argv[i], "-debug") == 0) {
             debug_enabled = 1;
+        } else if (strcmp(argv[i], "-fpu-maswag") == 0) {
+            use_maswag_fpu = 1;
         } else if (strcmp(argv[i], "-msize") == 0) {
             if (i == argc - 1) print_help(argv[0]);
             mem_size = atoi(argv[++i]) << 20;
