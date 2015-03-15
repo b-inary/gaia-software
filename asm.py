@@ -556,7 +556,7 @@ def expand_blt(op, operands, pred):
            ('bne', 'cmp' + op[1:])
     return expand_alu(c, ['r29', operands[0], operands[1]]) + [(b + pred, ['r29', 'r0', operands[2]])]
 
-# bfne, bfeq, bflt, bfle, bfgt, bfge
+# bflt, bfle, bfgt, bfge
 def expand_bfne(op, operands, pred):
     check_operands_n(operands, 3)
     b, c = ('beq', 'fcmple') if op == 'bfgt' else \
@@ -686,7 +686,7 @@ def expand_macro(line):
             return expand_bne(br_mnemonic, operands, pred)
         if br_mnemonic in ['blt', 'ble', 'bgt', 'bge']:
             return expand_blt(br_mnemonic, operands, pred)
-        if br_mnemonic in ['bfne', 'bfeq', 'bflt', 'bfle', 'bfgt', 'bfge']:
+        if br_mnemonic in ['bflt', 'bfle', 'bfgt', 'bfge']:
             return expand_bfne(br_mnemonic, operands, pred)
     return [(mnemonic, operands)]
 
