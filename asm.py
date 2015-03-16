@@ -145,6 +145,7 @@ alu4_table = {
     'and':       5,
     'or':        6,
     'xor':       7,
+    'adda':      8,
     'cmpult':   22,
     'cmpule':   23,
     'cmpne':    24,
@@ -662,7 +663,7 @@ def expand_macro(line):
         return []
     if mnemonic in macro_table:
         return macro_table[mnemonic](operands)
-    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'and', 'or', 'xor',
+    if mnemonic in ['add', 'sub', 'shl', 'shr', 'sar', 'and', 'or', 'xor', 'adda',
                     'cmpne', 'cmpeq', 'cmplt', 'cmple', 'cmpult', 'cmpule']:
         return expand_alu(mnemonic, operands)
     if mnemonic in ['cmpgt', 'cmpge', 'cmpugt', 'cmpuge']:

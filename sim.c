@@ -99,6 +99,7 @@ uint32_t alu(int tag, int ra, int rb, uint32_t lit)
         case  5: return reg[ra] & t;
         case  6: return reg[ra] | t;
         case  7: return reg[ra] ^ t;
+        case  8: return reg[ra] + 4 * t;
         case 22: return reg[ra] <  t;
         case 23: return reg[ra] <= t;
         case 24: return reg[ra] != t;
