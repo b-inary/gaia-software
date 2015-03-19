@@ -365,7 +365,7 @@ void update_irqbits()
     static int tick;
 
     // TIMER
-    if (++tick > 66e6 / 1000) {
+    if (++tick >= (int)(93.33e6 / 100)) {
         irq_bits |= 1 << IRQ_TIMER;
         tick = 0;
     }
